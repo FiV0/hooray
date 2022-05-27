@@ -18,7 +18,7 @@
   (containsKey [_ i] (if (int? i)
                        (and (<= 0 i) (< i 5))
                        (#{:e :a :v :tx :added} i)))
-  (entryAt [_ i] (nth (as-vec i)))
+  (entryAt [this i] (nth (as-vec this) i))
   (assoc [this k v] (apply ->Datom (assoc (as-vec this) ({:e 0 :a 1 :v 2 :tx 3 :added 4} k k) v)))
   (count [_] 5)
   (cons [this c] (cons c (as-vec this)))
@@ -41,10 +41,10 @@
   [[e a v tx added]]
   (->Datom e a v tx (= added :db/add)))
 
-(defmethod clojure.core/print-method asami.datom.Datom [o ^Writer w]
+(defmethod clojure.core/print-method hooray.datom.Datom [o ^Writer w]
   (.write w "#datom ")
   (print-method (as-vec o) w))
 
-(defmethod clojure.core/print-dup asami.datom.Datom [o ^Writer w]
-  (.write w "#asami/datom ")
+(defmethod clojure.core/print-dup hooray.datom.Datom [o ^Writer w]
+  (.write w "#hooray/datom ")
   (print-method (as-vec o) w))
