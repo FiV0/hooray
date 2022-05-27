@@ -9,7 +9,7 @@
   db/Database
   (as-of [this t] (throw (ex-info "todo" {})))
   (as-of-t [this] timestamp)
-  (entity [this id] (throw (ex-info "todo" {}))))
+  (entity [this eid] (graph/entity graph eid)))
 
 (declare transact*)
 
@@ -71,6 +71,8 @@
              [:db/add "foo" :is/cool true]])
 
   (db/transact conn data)
+
+  (-> conn db/db (db/entity "foo"))
 
 
   )

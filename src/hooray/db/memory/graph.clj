@@ -40,6 +40,10 @@
                       (map (datom-reorder-fn index-type) triples)))
             graph index-types)))
 
+(defn entity [{:keys [eav] :as graph} eid]
+  (-> (get eav eid)
+      (update-vals first)))
+
 (comment
   (def datoms (->> (range 100)
                    (partition 5)
