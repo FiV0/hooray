@@ -8,13 +8,16 @@
   (if (map? uri)
     uri
     (if-let [[_ db-type db-name] (re-find #"hooray:([^:]+)://(.+)" uri)]
-      {:type db-type
+      {:type (keyword db-type)
        :name db-name}
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 
-(defmulti connect #(-> % parse-uri :type))
-(defmethod connect :default [uri]
-  (throw (IllegalArgumentException. (str "No db implementation for " uri))))
+(defmulti connect* (fn [{:keys [type]}] type))
+(defmethod connect* :default [uri-map]
+  (throw (ex-info "No such db implementation" uri-map)))
+
+(defn connect [uri]
+  (connect* (parse-uri uri)))
 
 ;; mostly copied from datomic.api
 (defprotocol Database
