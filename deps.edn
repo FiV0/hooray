@@ -2,7 +2,8 @@
 
  :deps
  {org.clojure/clojure {:mvn/version "1.11.1"}
-  org.clojure/spec.alpha {:mvn/version "0.3.218"}}
+  org.clojure/spec.alpha {:mvn/version "0.3.218"}
+  org.clojure/core.rrb-vector {:mvn/version "0.1.1"}}
 
  :aliases
  {:dev
