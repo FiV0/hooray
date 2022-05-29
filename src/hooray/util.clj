@@ -32,3 +32,12 @@
   (dissoc-in b [:a :b :c])
 
   )
+
+(defn variable? [v]
+  (and (symbol? v) (= \? (first (name v)))))
+
+(defn wildcard? [v]
+  (= v '_))
+
+(defn constant? [v]
+  (not (or (wildcard? v) (variable? v))))

@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [clojure.core.rrb-vector :as fv]
-            [hooray.db :as db]))
+            [hooray.db :as db]
+            [hooray.util :as util]))
 
 (defn resolve-data [db where-clauses]
   (throw (ex-info "todo" {})))
@@ -23,14 +24,6 @@
     :else (throw (ex-info "Not supported input:" {:input input}))))
 
 
-(defn variable? [v]
-  (and (symbol? v) (= \? (first (name v)))))
-
-(defn wildcard? [v]
-  (= v '_))
-
-(defn constant? [v]
-  (not (or (wildcard? v) (variable? v))))
 
 ;; what follows needs to be cleaned up and rewritten
 ;; it currently makes some assumptions about the structure
@@ -39,9 +32,9 @@
 ;; todo use transducer
 (defn data-filter [[e a v :as where-clause] data]
   (cond->> data
-    (constant? e) (filter (fn [[e1 _ _]] (= e e1)))
-    (constant? a) (filter (fn [[_ a1 _]] (= a a1)))
-    (constant? v) (filter (fn [[_ _ v1]] (= v v1)))))
+    (util/constant? e) (filter (fn [[e1 _ _]] (= e e1)))
+    (util/constant? a) (filter (fn [[_ a1 _]] (= a a1)))
+    (util/constant? v) (filter (fn [[_ _ v1]] (= v v1)))))
 
 (comment
   (def data '[[sally :age 21]
@@ -57,7 +50,7 @@
        (reduce (fn [row [keep value]] (if keep (conj row value) row)) [])))
 
 (defn remove-constants [{:keys [pattern data]}]
-  (let [keep-pattern (map variable? pattern)
+  (let [keep-pattern (map util/variable? pattern)
         new-pattern (->> (map vector keep-pattern pattern)
                          (reduce (fn [p [keep v]] (if keep (conj p v) p)) []))
         new-data (map (partial shrink-data-row keep-pattern) data)]
