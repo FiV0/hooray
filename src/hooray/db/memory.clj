@@ -9,7 +9,10 @@
   db/Database
   (as-of [this t] (throw (ex-info "todo" {})))
   (as-of-t [this] timestamp)
-  (entity [this eid] (graph/entity graph eid)))
+  (entity [this eid] (graph/entity graph eid))
+
+  db/GraphDatabase
+  (graph [this] graph))
 
 (declare transact*)
 

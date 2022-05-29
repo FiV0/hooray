@@ -29,3 +29,6 @@
   (get-name [this] "Returns the name of the connection.")
   (db [this] "Returns the db of a connection.")
   (transact [this tx-data] "Submits a transaction to the database for writing."))
+
+(defprotocol GraphDatabase
+  (graph [this] "Returns the the underlying graph of the database"))

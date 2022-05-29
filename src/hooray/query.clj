@@ -1,12 +1,21 @@
 (ns hooray.query
-  (:require [clojure.set :as set]
+  (:require [clojure.core.rrb-vector :as fv]
+            [clojure.set :as set]
             [clojure.spec.alpha :as s]
-            [clojure.core.rrb-vector :as fv]
             [hooray.db :as db]
+            [hooray.graph :as graph]
             [hooray.util :as util]))
 
+;; data is way to overloaded terminology
+
 (defn resolve-data [db where-clauses]
-  (throw (ex-info "todo" {})))
+  (if (satisfies? db/GraphDatabase db)
+    (let [graph (db/graph db)]
+      (map (fn [where-clause]
+             {:pattern where-clause
+              :data (graph/resolve-triple graph where-clause)})
+           where-clauses))
+    (throw (ex-info "todo" {}))))
 
 (declare data-filter)
 
@@ -22,8 +31,6 @@
          where-clauses)
 
     :else (throw (ex-info "Not supported input:" {:input input}))))
-
-
 
 ;; what follows needs to be cleaned up and rewritten
 ;; it currently makes some assumptions about the structure
@@ -143,6 +150,8 @@
 ;; end of part to cleanup
 
 ;; TODO add spec for inputs
+;; TODO think about how multiple inputs are handled
+;; check with datomic
 (defn query [query input]
   (let [{:keys [find where]} query
         input-data (input->data input where)]
@@ -153,9 +162,11 @@
                  input-data)
          (compute-find find))))
 
-
 (comment
   (query '{:find [?person ?age]
            :where [[?person :age ?age]
                    [?person :likes pizza]]}
-         data))
+         data)
+
+
+  )
