@@ -36,6 +36,9 @@
 ;; it currently makes some assumptions about the structure
 ;; of the patterns (for examples duplicates in the same clause won't work)
 
+;; TODO use variable -> index mappings instead of vectors TODO implement everything via pattern + data
+;; TODO look at proper datalog resolving
+
 ;; todo use transducer
 (defn data-filter [[e a v :as where-clause] data]
   (cond->> data
