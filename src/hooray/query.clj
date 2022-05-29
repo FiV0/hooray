@@ -139,18 +139,26 @@
 
   (join '[?e ?a1 ?age] data1 '[?e ?a2 ?food] data2))
 
-;; end of part to cleanup
 
+(defn compute-find [find-clause {:keys [pattern data]}]
+  {:pre [(set/subset? (set find-clause) (set pattern))]}
+  (let [variable-index-map (into {} (map-indexed #(vector %2 %1) pattern))]
+    (map (fn [row]
+           (reduce (fn [result-row var] (conj result-row (nth row (get variable-index-map var)))) [] find-clause))
+         data)))
+
+;; end of part to cleanup
 
 ;; TODO add spec for inputs
 (defn query [query input]
   (let [{:keys [find where]} query
         input-data (input->data input where)]
-    (reduce (fn [{pattern1 :pattern data1 :data}
-                 {pattern2 :pattern data2 :data}]
-              (-> (join pattern1 data1 pattern2 data2)
-                  remove-constants))
-            input-data)))
+    (->> (reduce (fn [{pattern1 :pattern data1 :data}
+                      {pattern2 :pattern data2 :data}]
+                   (-> (join pattern1 data1 pattern2 data2)
+                       remove-constants))
+                 input-data)
+         (compute-find find))))
 
 
 (comment
