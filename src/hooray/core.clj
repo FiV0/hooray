@@ -1,5 +1,7 @@
 (ns hooray.core
   (:require [hooray.db :as db]
+            [hooray.db.memory]
+            [hooray.db.persistent]
             [hooray.query :as query]))
 
 (defn connect [uri]
