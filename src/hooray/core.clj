@@ -22,12 +22,12 @@
 
   (transact conn data)
 
-  (q '{:find [?name ?album]
-       :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
-               [?t :track/album ?album]
-               [?album :album/artist ?artist]
-               [?artist :artist/name ?name]]}
-     (db/db conn))
+  (time (q '{:find [?name ?album]
+             :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+                     [?t :track/album ?album]
+                     [?album :album/artist ?artist]
+                     [?artist :artist/name ?name]]}
+           (db/db conn)))
 
 
   )

@@ -6,7 +6,8 @@
             [hooray.graph :as graph]
             [hooray.util :as util]))
 
-;; data is way to overloaded terminology
+(defn pattern->indexed-map [pattern]
+  (into {} (map-indexed #(vector %2 %1) pattern)))
 
 (defn resolve-rows [db where-clauses]
   (if (satisfies? db/GraphDatabase db)
@@ -33,27 +34,6 @@
               [ethel :likes sushi]])
   (row-filter '[_ :likes ?e] data))
 
-
-(defn input->rows [input where-clauses]
-  (cond
-    (satisfies? db/Database input)
-    (resolve-rows input where-clauses)
-
-    (or (list? input) (vector? input))
-    (map (fn [where-clause]
-           {:pattern where-clause
-            :rows (row-filter where-clause input)})
-         where-clauses)
-
-    :else (throw (ex-info "Not supported input:" {:input input}))))
-
-;; what follows needs to be cleaned up and rewritten
-;; it currently makes some assumptions about the structure
-;; of the patterns (for examples duplicates in the same clause won't work)
-
-;; TODO use variable -> index mappings instead of vectors TODO implement everything via pattern + rows
-;; TODO look at proper datalog resolving
-
 (defn- shrink-data-row [keep-pattern row]
   (->> (map vector keep-pattern row)
        (reduce (fn [row [keep value]] (if keep (conj row value) row)) [])))
@@ -70,11 +50,34 @@
   (def the-filter '[_ :likes ?e])
   (remove-constants {:pattern the-filter :rows (row-filter the-filter data)}))
 
-(defn- join-rows? [data-row1 variable-index-map1 data-row2 variable-index-map2]
-  (loop [vars (keys variable-index-map2)]
+(defn input->rows [input where-clauses]
+  (let [res (cond
+              (satisfies? db/Database input)
+              (resolve-rows input where-clauses)
+
+              (or (list? input) (vector? input))
+              (map (fn [where-clause]
+                     {:pattern where-clause
+                      :rows (row-filter where-clause input)})
+                   where-clauses)
+
+              :else (throw (ex-info "Not supported input:" {:input input})))]
+    (->> res
+         (map remove-constants)
+         (map #(update % :pattern pattern->indexed-map)))))
+
+;; what follows needs to be cleaned up and rewritten
+;; it currently makes some assumptions about the structure
+;; of the patterns (for examples duplicates in the same clause won't work)
+
+;; TODO look at proper datalog resolving
+
+(defn- join-rows? [data-row1 pattern-index1 data-row2 pattern-index2]
+  {:pre [(= (set (keys pattern-index1)) (set (keys pattern-index2)))]}
+  (loop [vars (keys pattern-index2)]
     (if-let [var (first vars)]
-      (if (= (nth data-row1 (get variable-index-map1 var))
-             (nth data-row2 (get variable-index-map2 var)))
+      (if (= (nth data-row1 (get pattern-index1 var))
+             (nth data-row2 (get pattern-index2 var)))
         (recur (rest vars))
         false)
       true)))
@@ -83,15 +86,20 @@
   (join-rows? [3 4 5] {'?e 0} [1 2 3] {'?e 2})
   (join-rows? [3 4 5] {'?e 0 '?f 1} [1 2 3] {'?e 2 '?f 1})
   (join-rows? [3 4 5] {'?e 0} [1 2 5] {'?e 2})
-  (join-rows? [3 4 5] {'?e 0} [1 2 5] {'?f 2 '?e 1}))
+  (join-rows? [3 4 5] {'?e 0} [1 2 5] {'?f 2 '?e 1})
+  (join-rows? [3 4 5] {} [1 2 5] {})
+
+  )
 
 (defn- join-row* [data-row1 data-row2 keep-pattern]
   #_(fv/catvec data-row1 (shrink-data-row keep-pattern data-row2))
   (concat data-row1 (shrink-data-row keep-pattern data-row2)))
 
-(defn- join-row [data-row1 data-row2 variable-index-map1 variable-index-map2 keep-pattern]
-  (when (join-rows? data-row1 variable-index-map1 data-row2 variable-index-map2)
-    (join-row* data-row1 data-row2 keep-pattern)))
+;; TODO the key intersection can probably be done more efficiently
+;; as we can assume that the second pattern is small
+(defn- join-row [row1 pattern-index1 row2 pattern-index2 keep-pattern]
+  (when (join-rows? row1 pattern-index1 row2 pattern-index2)
+    (join-row* row1 row2 keep-pattern)))
 
 (defn cart-f [coll1 coll2 f]
   (if-let [v1 (first coll1)]
@@ -105,31 +113,28 @@
     []))
 
 (comment
-  (join-row [3 4 5] [1 2 3] {'e 0} {'e 2} [true true false])
-  (join-row [3 4 5] [1 2 5] {'e 0} {'e 2} [true true false])
+  (join-row [3 4 5] {'e 0} [1 2 3] {'e 2} [true true false])
+  (join-row [3 4 5] {'e 0} [1 2 5] {'e 2} [true true false])
 
   (cart-f [[3 4 5]
            [5 6 8]]
           [[1 2 3]
            [6 7 3]
            [8 9 5]]
-          #(join-row %1 %2 {'e 0}
-                     {'e 2}
-                     [true true false])))
+          #(join-row %1 {'e 0} %2 {'e 2} [true true false])))
 
-;; pattern2 should only contain variables
-(defn join [pattern1 data1 pattern2 data2]
-  (let [pattern2-set (set pattern2)
-        inter (set/intersection (set pattern1) pattern2-set)
-        variable-index-map2 (into {} (map-indexed #(vector %2 %1) pattern2))
-        variable-index-map1 (->> (map-indexed #(vector %2 %1) pattern1)
-                                 (filter (fn [[var _]] (contains? variable-index-map2 var)))
-                                 (into {}))
-        variable-index-map2 (select-keys variable-index-map2 (keys variable-index-map1))
-        new-pattern (vec (concat pattern1 (remove inter pattern2)))
-        data-row2-keep-pattern (map (complement inter) pattern2)]
-    {:pattern new-pattern
-     :rows (cart-f data1 data2 #(join-row %1 %2 variable-index-map1 variable-index-map2 data-row2-keep-pattern))}))
+(defn join [{rows1 :rows pattern-index1 :pattern} {rows2 :rows pattern-index2 :pattern}]
+  (let [p1-keys (keys pattern-index1)
+        p2-keys (keys pattern-index2)
+        inter (set/intersection (set p1-keys) (set p2-keys))
+        subset-p1 (select-keys pattern-index1 inter)
+        subset-p2 (select-keys pattern-index2 inter)
+        row2-keep-pattern (map (fn [[k _v]] ((complement inter) k)) pattern-index2)
+        new-pattern-index (->> (remove (fn [[k _]] (inter k)) pattern-index2)
+                               (sort #(compare (second %1) (second %2)))
+                               (reduce (fn [pattern-index [k _]] (assoc pattern-index k (count pattern-index))) pattern-index1))]
+    {:pattern new-pattern-index
+     :rows (cart-f rows1 rows2 #(join-row %1 subset-p1 %2 subset-p2 row2-keep-pattern))}))
 
 (comment
   (def data1 '[[sally :age 21]
@@ -139,29 +144,33 @@
                [sally :likes opera]
                [ethel :likes sushi]])
 
-  (join '[?e ?a1 ?age] data1 '[?e ?a2 ?food] data2))
+  (join {:pattern (pattern->indexed-map '[?e ?a1 ?age])
+         :rows data1}
+        {:pattern (pattern->indexed-map '[?e ?a2 ?food])
+         :rows  data2})
+  (join {:pattern (pattern->indexed-map '[?e ?a1 ?age])
+         :rows data1}
+        {:pattern (pattern->indexed-map '[?e1 ?a2 ?food])
+         :rows data2}))
 
 
-(defn compute-find [find-clause {:keys [pattern rows]}]
-  {:pre [(set/subset? (set find-clause) (set pattern))]}
-  (let [variable-index-map (into {} (map-indexed #(vector %2 %1) pattern))]
-    (map (fn [row]
-           (reduce (fn [result-row var] (conj result-row (nth row (get variable-index-map var)))) [] find-clause))
-         rows)))
-
-;; end of part to cleanup
+(defn compute-find [find-clause {rows :rows pattern-index :pattern}]
+  {:pre [(set/subset? (set find-clause) (set (keys pattern-index)))]}
+  (let [select (fn [row] (reduce (fn [result-row var]
+                                   (conj result-row (nth row (get pattern-index var))))
+                                 []
+                                 find-clause)) ]
+    (map select rows)))
 
 ;; TODO add spec for inputs
 ;; TODO think about how multiple inputs are handled
+;; TODO replace wildcards with unique symbols
+;; TODO assert unique symbols per where-clause
 ;; check with datomic
 (defn query [query input]
   (let [{:keys [find where]} query
         input-data (input->rows input where)]
-    (->> (reduce (fn [{pattern1 :pattern rows1 :rows}
-                      {pattern2 :pattern rows2 :rows}]
-                   (-> (join pattern1 rows1 pattern2 rows2)
-                       remove-constants))
-                 input-data)
+    (->> (reduce join input-data)
          (compute-find find))))
 
 (comment
@@ -169,6 +178,4 @@
            :where [[?person :age ?age]
                    [?person :likes pizza]]}
          data)
-
-
   )
