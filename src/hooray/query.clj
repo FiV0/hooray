@@ -162,6 +162,27 @@
                                  find-clause)) ]
     (map select rows)))
 
+(defn- unique-variables? [clause]
+  (let [variables (filter util/variable? clause)]
+    (= variables (distinct variables))))
+
+
+(defn make-wildcards-unique [clause]
+  (mapv #(if (util/wildcard? %) (gensym "wildcard_") %) clause))
+
+(defn cleanup-where [clauses]
+  (let [res (mapv make-wildcards-unique clauses)]
+    (loop [clauses res]
+      (if-let [clause (first clauses)]
+        (if (unique-variables? clause)
+          (recur (rest clauses))
+          (throw (ex-info "Where-clause needs distinct variables!" {:clause clause})))
+        res))))
+
+(comment
+  (cleanup-where '[[_ :foo ?e]
+                   [?e :bar 1]]))
+
 ;; TODO add spec for inputs
 ;; TODO think about how multiple inputs are handled
 ;; TODO replace wildcards with unique symbols
@@ -169,6 +190,7 @@
 ;; check with datomic
 (defn query [query input]
   (let [{:keys [find where]} query
+        where (cleanup-where where)
         input-data (input->rows input where)]
     (->> (reduce join input-data)
          (compute-find find))))
