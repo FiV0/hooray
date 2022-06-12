@@ -10,3 +10,6 @@
     "Bulk operation to add and remove multiple statements in a single operation")
   (resolve-triple [this triple]
     "Resolves patterns from the graph, and returns unbound columns only"))
+
+(defprotocol BitempGraph
+  (in-between [this t1 t2] "Creates a graph with only facts "))

@@ -25,6 +25,10 @@
   (as-of-t [this] "Returns the as-of point, or nil if none")
   (entity [this id] "Returns an entity for an identifier"))
 
+(defprotocol BitempDatabase
+  (in-between [this t1 t2] "Retrieves a database with facts added or retrieved in between t1 and t2.")
+  (entity-history [this id] "Retrieves all versions of a document."))
+
 (defprotocol Connection
   (get-name [this] "Returns the name of the connection.")
   (db [this] "Returns the db of a connection.")
