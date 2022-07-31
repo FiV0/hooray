@@ -12,6 +12,11 @@
        :name db-name}
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 
+
+(comment
+  (ns-unmap *ns* 'connect*)
+  )
+
 (defmulti connect* (fn [{:keys [type]}] type))
 (defmethod connect* :default [uri-map]
   (throw (ex-info "No such db implementation" uri-map)))
@@ -26,8 +31,7 @@
   (entity [this id] "Returns an entity for an identifier"))
 
 (defprotocol BitempDatabase
-  (in-between [this t1 t2] "Retrieves a database with facts added or retrieved in between t1 and t2.")
-  (entity-history [this id] "Retrieves all versions of a document."))
+  (in-between [this t1 t2] "Retrieves a database with facts added or retrieved in between t1 and t2."))
 
 (defprotocol Connection
   (get-name [this] "Returns the name of the connection.")

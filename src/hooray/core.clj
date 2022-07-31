@@ -20,6 +20,10 @@
   (def conn (db/connect "hooray:mem://data"))
   (def data (edn/read-string (slurp "resources/transactions.edn")))
 
+  (def bi-conn (db/connect "hooray:bi-mem://data"))
+
+  (-> bi-conn :state deref :db type)
+
   (transact conn data)
 
   (time (q '{:find [?name ?album]

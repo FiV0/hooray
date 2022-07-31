@@ -1,17 +1,23 @@
 {:paths ["src" "resources"]
 
  :deps
- {org.clojure/clojure {:mvn/version "1.11.1"}
-  org.clojure/spec.alpha {:mvn/version "0.3.218"}
-  org.clojure/core.rrb-vector {:mvn/version "0.1.1"}}
+ {
+  org.clojure/clojure                 {:mvn/version "1.11.1"}
+  org.clojure/spec.alpha              {:mvn/version "0.3.218"}
+  org.clojure/core.rrb-vector         {:mvn/version "0.1.1"}
+  com.dean/interval-tree              {:mvn/version "0.1.2"}
+  clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
+  }
 
  :aliases
  {:dev
   {:extra-paths ["dev"]
-   :extra-deps  {org.clojars.quoll/asami     {:mvn/version "2.3.0"}
+   :extra-deps  {
+                 org.clojars.quoll/asami     {:mvn/version "2.3.0"}
                  com.xtdb/xtdb-core          {:mvn/version "1.21.0"}
                  org.clojure/tools.namespace {:mvn/version "1.1.0"}
-                 com.lambdaisland/classpath  {:mvn/version "0.0.27"}}}
+                 com.lambdaisland/classpath  {:mvn/version "0.0.27"}
+                 }}
 
   :test
   {:extra-paths ["test"]

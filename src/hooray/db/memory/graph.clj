@@ -8,6 +8,7 @@
 
 (declare memory-graph)
 (declare get-from-index)
+(declare transact)
 
 (defrecord MemoryGraph [eav ave vea]
   graph/Graph
@@ -15,10 +16,22 @@
   (graph-add [this triple] (throw (ex-info "todo" {})))
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
-  (resolve-triple [this triple] (get-from-index this triple)))
+  (resolve-triple [this triple] (get-from-index this triple))
+  (transact [this tx-data ts] (transact this tx-data ts)))
 
 (defn memory-graph []
   (->MemoryGraph {} {} {}))
+
+(defn- map->triples [m ts]
+  (let [eid (or (:db/id m) (random-uuid))]
+    (->> (dissoc m :db/id)
+         (map (fn [[k v]] (vector eid k v ts true))))))
+
+(defn transaction->triples [transaction ts]
+  (cond
+    (map? transaction) (map->triples transaction ts)
+    (= :db/add (first transaction)) [(vec (concat (rest transaction) [ts true]))]
+    (= :db/retract (first transaction)) [(vec (concat (rest transaction) [ts false]))]))
 
 (def ^:private index-types [:eav :ave :vea])
 
@@ -46,28 +59,32 @@
 (defn index-triples [index triples]
   (reduce index-triple index triples))
 
-(defn insert-datoms [graph datoms]
-  (let [triples (map #(datom/as-vec %) datoms)]
-    (reduce (fn [graph index-type]
-              (update graph index-type index-triples
-                      (map (triple-reorder-fn index-type) triples)))
-            graph index-types)))
+(defn insert-triples [graph triples]
+  (reduce (fn [graph index-type]
+            (update graph index-type index-triples
+                    (map (triple-reorder-fn index-type) triples)))
+          graph index-types))
 
 (defn entity [{:keys [eav] :as graph} eid]
   (-> (get eav eid)
       (update-vals first)))
 
+(defn transact [graph tx-data ts]
+  (let [triples (map #(transaction->triples % ts) tx-data)]
+    (insert-triples graph triples)))
+
 (comment
-  (def datoms (->> (range 100)
-                   (partition 5)
-                   (map #(apply datom/->Datom %))
-                   (take 3)))
+  (def triples (->> (range 100)
+                    (partition 5)
+                    (map #(apply vector %))
+                    (take 3)))
 
-  (def g (insert-datoms (memory-graph) datoms))
+  (def g (insert-triples (memory-graph) triples))
 
-  (def retraction (datom/->Datom 0 1 2 nil false))
+  (def retraction (vector 0 1 2 nil false))
 
-  (insert-datoms g [retraction])
+  (insert-triples g [retraction])
+
   )
 
 ;; pretty much one to one copied from asami
