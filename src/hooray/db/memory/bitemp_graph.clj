@@ -1,8 +1,9 @@
 (ns hooray.db.memory.bitemp-graph
-  (:require [hooray.util :as util :refer [dissoc-in]]
+  (:require [clojure.core.rrb-vector :as fv]
+            [com.dean.interval-tree.core :as dean]
             [hooray.datom :as datom]
             [hooray.graph :as graph]
-            [com.dean.interval-tree.core :as dean]
+            [hooray.util :as util :refer [dissoc-in]]
             [java-time :as jt])
   (:import (java.time Instant)
            (java.util Date)))
@@ -22,59 +23,68 @@
 
 (defn- interval-map [] (dean/interval-map {}))
 
-(defn- now-date [] (java.util.Date.))
-(defn- now-instant [] (jt/instant))
+(defn- ->inst
+  ([] (java.util.Date.))
+  ([ms] (java.util.Date ms)))
 
-(jt/instant 0)
+(def ^:private min-ms 0)
+(def ^:private max-ms Long/MAX_VALUE)
 
-(jt/instant (/ Long/MAX_VALUE 10))
+(defn- inst->ms [inst default]
+  (if inst
+    (inst-ms inst)
+    default))
 
-(java.util.Date 0)
+(defn- triple-vt->ms [[e a v vt-start vt-end]]
+  [e a v (inst->ms vt-start min-ms) (inst->ms vt-end max-ms)])
 
-
-(do #inst "2018-05-18T09:20:27.966-00:00")
-
+(defn- triple-vt->inst [[e a v vt-start vt-end]]
+  [e a v (->inst vt-start) (->inst vt-end)])
 
 (defn memory-bitemp-graph []
   (->MemoryBitempGraph (interval-map) (interval-map) (interval-map)))
 
-(defn- map->triples [m valid-from valid-to]
+(defn- map->triples [m]
   (let [eid (or (:db/id m) (random-uuid))]
     (->> (dissoc m :db/id)
-         (map (fn [[k v]] (vector eid k v valid-from valid-to))))))
+         (map (fn [[k v]] (vector eid k v))))))
 
+(defn transaction->triples [[type value vt-start vt-end]]
+  (let [vt-start (inst->ms vt-start min-ms)
+        vt-end (inst->ms vt-end max-ms)]
+    (if (map? value)
+      (->> (map->triples value)
+           (map #(into % [vt-start vt-end (= :db/add type)])))
+      [(into value [vt-start vt-end (= :db/add type)])])))
 
-(defn add-valid-times [])
+(comment
+  (def now (jt/instant))
+  (transaction->triples [:db/add {:foo/bar 1 :bar/foo 2} now (jt/instant (+ (inst-ms now) 100000))])
+  )
 
-(defn transaction->triples [[type value valid-from valid-to]]
-  (cond
-    (map? value) (map->triples transaction ts)
-    (= :db/add (first transaction)) [(vec (concat (rest transaction) [ts true]))]
-    (= :db/retract (first transaction)) [(vec (concat (rest transaction) [ts false]))]))
-
-
-;;(< (util/now) (do (Thread/sleep 100) (util/now)))
 
 (def ^:private index-types [:teav :tave :tvea])
 
 (defn triple-reorder-fn [index-type]
   (case index-type
     :teav identity
-    :tave (fn [[e a v valid-from valid-to]] [a v e valid-from valid-to])
-    :tvea (fn [[e a v valid-from valid-to]] [e a v valid-from valid-to])
+    :tave (fn [[e a v vt-start vt-end added]] [a v e vt-start vt-end added])
+    :tvea (fn [[e a v vt-start vt-end added]] [e a v vt-start vt-end added])
     (throw (ex-info "No such index!" {}))))
 
-(defn index-triple-add [index [v1 v2 v3 valid-from valid-to]]
-  (update-in index [[valid-from valid-to] v1 v2] (fnil conj #{}) v3))
+(defn index-triple-add [index [v1 v2 v3 vt-start vt-end]]
+  (update-in index [[vt-start vt-end] v1 v2] (fnil conj #{}) v3))
 
-#_(defn index-triple-retract [index [v1 v2 v3]]
-    (let [new-v3s (disj (get-in index [v1 v2]) v3)]
-      (if (seq new-v3s)
-        (assoc-in index [v1 v2] new-v3s)
-        (dissoc-in index [v1 v2]))))
+(defn index-triple-retract [index [v1 v2 v3 vt-start vt-end]]
+  (let [new-v3s (disj (get-in index [[vt-start vt-end] v1 v2]) v3)]
+    (if (seq new-v3s)
+      (assoc-in index [[vt-start vt-end] v1 v2] new-v3s)
+      (dissoc-in index [[vt-start vt-end] v1 v2]))))
 
 (defn index-triple [index triple]
-  (index-triple-add index triple))
+  (if (nth triple 5)
+    (index-triple-add index triple)
+    (index-triple-retract index triple)))
 
 (defn index-triples [index triples]
   (reduce index-triple index triples))
@@ -85,4 +95,57 @@
                     (map (triple-reorder-fn index-type) triples)))
           graph index-types))
 
-kkkk
+(comment
+  (def now (jt/instant))
+  (def later (jt/instant (+ (inst-ms now) 10000000000)))
+  (def data [[:db/add {:foo/bar 1 :bar/foo 2} now later]
+             [:db/add {:foo/too 1 :bar/toto 2} now later]])
+
+  (def g (insert-triples (memory-bitemp-graph) data))
+
+  )
+
+(defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
+
+(defmulti get-from-index (fn [index binding ts] (simplify binding)))
+
+(defmethod get-from-index '[? ? ?]
+  [{index :teav} _ ts]
+  (for [m (get index ts) e (keys m) a (keys (m e)) v ((m e) a)]
+    [e a v]))
+
+(defmethod get-from-index '[? ? :v]
+  [{index :tvea} [_ _ v] ts]
+  (for [m (get index ts) e (keys (m v)) a ((m v) e)]
+    [e a v]))
+
+(defmethod get-from-index '[? :v ?]
+  [{index :tave} [_ a _]]
+  (for [v (keys (index a)) e ((index a) v)]
+    [e a v]))
+
+(defmethod get-from-index '[:v ? ?]
+  [{index :eav} [e _ _]]
+  (for [a (keys (index e)) v ((index e) a)]
+    [e a v]))
+
+(defmethod get-from-index '[? :v :v]
+  [{index :ave} [_ a v]]
+  (for [e (get-in index [a v])]
+    [e a v]))
+
+(defmethod get-from-index '[:v ? :v]
+  [{index :vea} [e _ v]]
+  (for [a (get-in index [v e])]
+    [e a v]))
+
+(defmethod get-from-index '[:v :v ?]
+  [{index :vea} [e _ v]]
+  (for [a (get-in index [v e])]
+    [e a v]))
+
+(defmethod get-from-index '[:v :v :v]
+  [{index :eav} [e a v]]
+  (if ((get-in index [e a]) v)
+    [[e a v]]
+    []))
