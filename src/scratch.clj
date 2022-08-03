@@ -1,5 +1,6 @@
 (ns scratch
-  (:gen-class))
+  "Mainly testing out things and to explore other dbs."
+  (:require [asami.core :as d]
+            [xtdb.api :as xt]))
 
-(defn -main [& args]
-  (println "Hello from Clojure!!! " args))
+(def node (xt/start-node {}))

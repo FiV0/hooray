@@ -5,7 +5,10 @@
   org.clojure/clojure                 {:mvn/version "1.11.1"}
   org.clojure/spec.alpha              {:mvn/version "0.3.218"}
   org.clojure/core.rrb-vector         {:mvn/version "0.1.1"}
-  com.dean/interval-tree              {:mvn/version "0.1.2"}
+  com.dean/interval-tree              {:local/root "../interval-tree"}
+  #_{:git/url "https://github.com/FiV0/interval-tree.git"
+     :git/sha "22520d57bffbb564a9d7e08b310519661f5fd18e"}
+  #_{:mvn/version "0.1.2"}
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
   }
 
@@ -15,6 +18,7 @@
    :extra-deps  {
                  org.clojars.quoll/asami     {:mvn/version "2.3.0"}
                  com.xtdb/xtdb-core          {:mvn/version "1.21.0"}
+                 ;; {:local/root "../../xtdb/xtdb/core/"}
                  org.clojure/tools.namespace {:mvn/version "1.1.0"}
                  com.lambdaisland/classpath  {:mvn/version "0.0.27"}
                  }}

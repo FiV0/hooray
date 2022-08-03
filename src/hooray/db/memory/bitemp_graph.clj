@@ -19,7 +19,7 @@
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
   (resolve-triple [this triple] (get-from-index this triple))
-  (transact [this tx-data ts] (transact this tx-data ts)))
+  (transact [this tx-data] (transact this tx-data)))
 
 (defn- interval-map [] (dean/interval-map {}))
 
@@ -73,7 +73,11 @@
     (throw (ex-info "No such index!" {}))))
 
 (defn index-triple-add [index [v1 v2 v3 vt-start vt-end]]
-  (update-in index [[vt-start vt-end] v1 v2] (fnil conj #{}) v3))
+  (let [interval [vt-start vt-end]
+        old-val (some-> (find index interval) val)]
+    (->>
+     (update-in (if old-val old-val {}) [v1 v2] (fnil conj #{}) v3)
+     (assoc index interval))))
 
 (defn index-triple-retract [index [v1 v2 v3 vt-start vt-end]]
   (let [new-v3s (disj (get-in index [[vt-start vt-end] v1 v2]) v3)]
@@ -95,13 +99,19 @@
                     (map (triple-reorder-fn index-type) triples)))
           graph index-types))
 
+(defn transact [graph tx-data]
+  (insert-triples graph (mapcat transaction->triples tx-data)))
+
 (comment
   (def now (jt/instant))
   (def later (jt/instant (+ (inst-ms now) 10000000000)))
   (def data [[:db/add {:foo/bar 1 :bar/foo 2} now later]
              [:db/add {:foo/too 1 :bar/toto 2} now later]])
 
-  (def g (insert-triples (memory-bitemp-graph) data))
+  (->> (mapcat transaction->triples data)
+       (map (triple-reorder-fn :tave)))
+
+  (def g (transact (memory-bitemp-graph) data))
 
   )
 
