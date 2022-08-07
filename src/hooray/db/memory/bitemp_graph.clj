@@ -117,7 +117,7 @@
 
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
 
-(defmulti get-from-index (fn [index binding ts] (simplify binding)))
+(defmulti get-from-index (fn [indices binding ts] (simplify binding)))
 
 (defmethod get-from-index '[? ? ?]
   [{index :teav} _ ts]
@@ -130,18 +130,18 @@
     [e a v]))
 
 (defmethod get-from-index '[? :v ?]
-  [{index :tave} [_ a _]]
-  (for [v (keys (index a)) e ((index a) v)]
+  [{index :tave} [_ a _] ts]
+  (for [m (get index ts) v (keys (m a)) e ((m a) v)]
     [e a v]))
 
 (defmethod get-from-index '[:v ? ?]
-  [{index :eav} [e _ _]]
-  (for [a (keys (index e)) v ((index e) a)]
+  [{index :teav} [e _ _] ts]
+  (for [m (get index ts) a (keys (m e)) v ((m e) a)]
     [e a v]))
 
 (defmethod get-from-index '[? :v :v]
-  [{index :ave} [_ a v]]
-  (for [e (get-in index [a v])]
+  [{index :tave} [_ a v] ts]
+  (for [e (get-in ()[a v])]
     [e a v]))
 
 (defmethod get-from-index '[:v ? :v]
@@ -159,3 +159,8 @@
   (if ((get-in index [e a]) v)
     [[e a v]]
     []))
+
+(comment
+  (get-from-index g '[?a ?b ?c] (inst-ms now))
+
+  )
