@@ -18,7 +18,7 @@
   (graph-add [this triple] (throw (ex-info "todo" {})))
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
-  (resolve-triple [this triple] (get-from-index this triple))
+  (resolve-triple [this triple ts] (get-from-index this triple ts))
   (transact [this tx-data] (transact this tx-data)))
 
 (defn- interval-map [] (dean/interval-map {}))
@@ -30,10 +30,12 @@
 (def ^:private min-ms 0)
 (def ^:private max-ms Long/MAX_VALUE)
 
-(defn- inst->ms [inst default]
-  (if inst
-    (inst-ms inst)
-    default))
+(defn- inst->ms
+  ([inst] (inst->ms inst nil))
+  ([inst default]
+   (if inst
+     (inst-ms inst)
+     default)))
 
 (defn- triple-vt->ms [[e a v vt-start vt-end]]
   [e a v (inst->ms vt-start min-ms) (inst->ms vt-end max-ms)])
@@ -141,26 +143,32 @@
 
 (defmethod get-from-index '[? :v :v]
   [{index :tave} [_ a v] ts]
-  (for [e (get-in ()[a v])]
+  (for [m (get index ts) e (get-in m [a v])]
     [e a v]))
 
 (defmethod get-from-index '[:v ? :v]
-  [{index :vea} [e _ v]]
-  (for [a (get-in index [v e])]
+  [{index :tvea} [e _ v] ts]
+  (for [m (get index ts) a (get-in m [v e])]
     [e a v]))
 
 (defmethod get-from-index '[:v :v ?]
-  [{index :vea} [e _ v]]
-  (for [a (get-in index [v e])]
+  [{index :tvea} [e _ v] ts]
+  (for [m (get index ts) a (get-in m [v e])]
     [e a v]))
 
+;; a nil v value is a problem
 (defmethod get-from-index '[:v :v :v]
-  [{index :eav} [e a v]]
-  (if ((get-in index [e a]) v)
-    [[e a v]]
-    []))
+  [{index :teav} [e a v] ts]
+  (loop [ms (get index ts) res []]
+    (if-let [m (first ms)]
+      (recur (rest ms)
+             (if (get-in m [e a v])
+               (conj res [e a v])
+               res))
+      res)))
 
 (comment
   (get-from-index g '[?a ?b ?c] (inst-ms now))
+  (get-from-index g [#uuid "e4976c80-1b5c-4226-9ab2-c2d5c2e6a411" :foo/bar 1]  (inst-ms now))
 
   )

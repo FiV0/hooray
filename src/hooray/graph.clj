@@ -8,7 +8,9 @@
   (graph-delete [this triple] "Removes triples from the graph")
   (graph-transact [this tx-id assertions retractions]
     "Bulk operation to add and remove multiple statements in a single operation")
-  (resolve-triple [this triple]
+  (resolve-triple
+    [this triple]
+    [this triple ts]
     "Resolves patterns from the graph, and returns unbound columns only")
   (transact
     [this tx-data]

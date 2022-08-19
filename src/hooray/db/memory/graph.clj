@@ -128,6 +128,7 @@
   (for [a (get-in index [v e])]
     [e a v]))
 
+;; a nil v value is a problem
 (defmethod get-from-index '[:v :v :v]
   [{index :eav} [e a v]]
   (if ((get-in index [e a]) v)
