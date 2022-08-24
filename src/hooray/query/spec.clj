@@ -2,6 +2,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]))
 
+
 ;; big parts copied from xtdb and core2
 (s/def ::logic-var
   (s/and simple-symbol?
@@ -26,13 +27,21 @@
   (s/and simple-symbol?
          (comp #(str/starts-with? % "$") name)))
 
+(s/def ::wildcard
+  (s/and simple-symbol?
+         #(= "_" (name %))))
+
 (s/def ::triple
   (s/and vector?
          (s/conformer identity vec)
          (s/cat
-          :e (s/or :literal ::eid, :logic-var ::logic-var)
-          :a (s/? (s/or :logic-var ::logic-var, :literal ::value)) ;; should this be just keyword?
-          :v (s/? (s/or :logic-var ::logic-var, :literal ::value)))))
+          :e (s/or :wildcard ::wildcard :literal ::eid, :logic-var ::logic-var)
+          :a (s/? (s/or :wildcard ::wildcard :logic-var ::logic-var, :literal ::value)) ;; should this be just keyword?
+          :v (s/? (s/or :wildcard ::wildcard :logic-var ::logic-var, :literal ::value)))))
+
+(comment
+  (s/conform ::triple '[?t :track/album ?album])
+  (s/conform ::triple '[_ :track/album ?album]))
 
 (s/def ::term (s/or :triple ::triple))
 
@@ -60,7 +69,8 @@
                    [[?t :track/name "For Those About To Rock (We Salute You)"]
                     [?t :track/album ?album]
                     [?album :album/artist ?artist]
-                    [?artist :artist/name ]]
+                    [?artist :artist/name ]
+                    [_ :foo/bar]]
                    :limit 12})
 
   )
