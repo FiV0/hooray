@@ -1,5 +1,6 @@
 (ns hooray.testing.xt
   (:require [xtdb.api :as xt]
+            [xtdb.query :as query]
             [clojure.edn :as edn]))
 
 (defn wrap-in-puts [data]
@@ -10,6 +11,7 @@
                (wrap-in-puts)))
 
 (def node (xt/start-node {}))
+(.close node)
 
 (xt/submit-tx node data)
 
@@ -23,9 +25,25 @@
          [?album :album/artist ?artist]
          [?artist :artist/name ?name]]})
 
+
+(query/query-plan-for (db) '{:find [?name]
+                             :where
+                             [[?t :track/name "Foo"]
+                              [?t :track/album "Foo"]]})
+
+
 (comment
   (require '[xtdb.query])
-  (sc.api/letsc [1 -1]
-                conformed-query)
+  (sc.api/letsc [2 -1]
+                var->joins)
+
+  (def n (xt/start-node {}))
+  (xt/submit-tx n [[::xt/put {:xt/id 1 :data/foo 2}]])
+
+  (xt/q (xt/db n)
+        '{:find ["foo"]
+          :where [[1 :data/foo 2]
+                  [1 :foo/bar 3]]}
+        )
 
   )

@@ -1,10 +1,18 @@
 (ns hooray.query
   (:require [clojure.core.rrb-vector :as fv]
             [clojure.set :as set]
+            [clojure.string :as str]
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
             [hooray.graph :as graph]
-            [hooray.util :as util]))
+            [hooray.util :as util]
+            [hooray.query.spec :as hooray-spec]))
+
+(defn same-triples? [pattern1 pattern2]
+  (->> (map #(or (and (util/variable? %1) (util/variable? %2))
+                 (= %1 %2))
+            pattern1 pattern2)
+       (every? true?)))
 
 (defn pattern->indexed-map [pattern]
   (into {} (map-indexed #(vector %2 %1) pattern)))
@@ -179,6 +187,13 @@
           (throw (ex-info "Where-clause needs distinct variables!" {:clause clause})))
         res))))
 
+(defn- ->return-maps [{:keys [keys syms strs]}]
+  (let [ks (or (some->> keys (mapv keyword))
+               (some->> syms (mapv symbol))
+               (some->> strs (mapv str)))]
+    (fn [row]
+      (zipmap ks row))))
+
 (comment
   (cleanup-where '[[_ :foo ?e]
                    [?e :bar 1]]))
@@ -188,16 +203,78 @@
 ;; TODO replace wildcards with unique symbols
 ;; TODO assert unique symbols per where-clause
 ;; check with datomic
-(defn query [query input]
+(defn query2 [query input]
   (let [{:keys [find where]} query
         where (cleanup-where where)
         input-data (input->rows input where)]
     (->> (reduce join input-data)
          (compute-find find))))
+(comment
+  (query2 '{:find [?person ?age]
+            :where [[?person :age ?age]
+                    [?person :likes pizza]]}
+          data))
+
+(defn- ->return-maps [{:keys [keys syms strs]}]
+  (let [ks (or (some->> keys (mapv keyword))
+               (some->> syms (mapv symbol))
+               (some->> strs (mapv str)))]
+    (fn [row]
+      (zipmap ks row))))
+
+(defn logic-var? [v]
+  (and (simple-symbol? v)
+       (comp #(str/starts-with? % "?") name)))
+
+(def literal? (complement logic-var?))
+
+(defn- vars-from-triple [{:keys [e a v]}]
+  (->> [e a v]
+       (filter (comp #{:logic-var} first))
+       (map second)))
+
+(defn var-join-order [{:keys [where] :as q} _db]
+  (->> where
+       (filter (comp #{:triple} first))
+       (mapcat (comp vars-from-triple second))
+       dedupe))
+
+(defn query-plan [q db]
+  (let [var-join-order (var-join-order q db)]
+    {:var-join-order var-join-order
+     :var->bindings (into {} (map-indexed (fn [i var] [var i]) var-join-order))}))
 
 (comment
-  (query '{:find [?person ?age]
-           :where [[?person :age ?age]
-                   [?person :likes pizza]]}
-         data)
+  (def conformed-q (hooray-spec/conform-query '{:find [?name]
+                                                :where
+                                                [[?t :track/name "For Those About To Rock (We Salute You)"]
+                                                 [?t :track/album ?album]
+                                                 [?album :album/artist ?artist]
+                                                 [?artist :artist/name ]
+                                                 [_ :foo/bar]]
+                                                :limit 12}))
+  (query-plan conformed-q nil))
+
+(defn ->unary-index-fn [{}])
+
+(defn ->binary-index-fn [{}])
+
+(defn ->ternary-index-fn [{}])
+
+(defn var->joins [q db])
+
+(defn compile-query [q db]
+  (let [q-plan (query-plan q db)]
+    (->
+     (query-plan q db)
+     (assoc :var->joins (var->joins q db)))))
+
+
+(defn query [q db]
+  (let [conformed-q (hooray-spec/conform-query q)
+        q-plan (query-plan conformed-q db)]
+
+
+
+    )
   )

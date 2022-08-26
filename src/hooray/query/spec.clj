@@ -2,8 +2,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]))
 
-
-;; big parts copied from xtdb and core2
+;; big parts copied from xtdb
 (s/def ::logic-var
   (s/and simple-symbol?
          (comp #(str/starts-with? % "?") name)))
