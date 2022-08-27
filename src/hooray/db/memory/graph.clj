@@ -8,6 +8,8 @@
 
 (declare memory-graph)
 (declare get-from-index)
+(declare get-from-index-unary)
+(declare get-from-index-binary)
 (declare transact)
 
 (defrecord MemoryGraph [eav ave vea]
@@ -17,7 +19,11 @@
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
   (resolve-triple [this triple] (get-from-index this triple))
-  (transact [this tx-data ts] (transact this tx-data ts)))
+  (transact [this tx-data ts] (transact this tx-data ts))
+
+  graph/GraphIndex
+  (resolve-singleton [this type singleton] (get-from-index-unary this type singleton))
+  (resolve-two-tuple [this type tuple] (get-from-index-unary this type tuple)))
 
 (defn memory-graph []
   (->MemoryGraph {} {} {}))
@@ -124,8 +130,8 @@
     [e a v]))
 
 (defmethod get-from-index '[:v :v ?]
-  [{index :vea} [e _ v]]
-  (for [a (get-in index [v e])]
+  [{index :eav } [e a _]]
+  (for [v (get-in index [e a])]
     [e a v]))
 
 ;; a nil v value is a problem
@@ -134,3 +140,51 @@
   (if ((get-in index [e a]) v)
     [[e a v]]
     []))
+
+(def ^:private binary-index-remap
+  {:ea :eav
+   :av :ave
+   :ve :vea})
+
+(defmulti get-from-index-binary (fn [index type binding] (simplify binding)))
+
+(defmethod get-from-index-binary '[? ?]
+  [index type _]
+  (let [index ((binary-index-remap type) index)]
+    (for [v1 (keys index) v2 (keys (index v1))] [v1 v2])))
+
+(defmethod get-from-index-binary '[:v ?]
+  [index type [v1]]
+  (let [index ((binary-index-remap type) index)]
+    (for [v2 (keys (index v1))] [v1 v2])))
+
+(defmethod get-from-index-binary '[? :v]
+  [index type [_ v2]]
+  (let [index ((binary-index-remap type) index)]
+    (for [v1 (keys index) :when (get-in index [v1 v2])] [v1 v2])))
+
+(defmethod get-from-index-binary '[:v :v]
+  [index type [v1 v2]]
+  (let [index ((binary-index-remap type) index)]
+    (if (get-in index [v1 v2])
+      [[v1 v2]]
+      [])))
+
+(def ^:private unary-index-remap
+  {:e :eav
+   :a :ave
+   :v :vea})
+
+(defmulti get-from-index-unary (fn [index type binding] (simplify binding)))
+
+(defmethod get-from-index-unary '[?]
+  [index type _]
+  (let [index ((unary-index-remap type) index)]
+    (for [v1 (keys index)] [v1])))
+
+(defmethod get-from-index-unary '[:v]
+  [index type [v1]]
+  (let [index ((unary-index-remap type) index)]
+    (if (get index v1)
+      [[v1]]
+      [])))
