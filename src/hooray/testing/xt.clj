@@ -34,16 +34,16 @@
 
 (comment
   (require '[xtdb.query])
-  (sc.api/letsc [2 -1]
+  (sc.api/letsc [1 -1]
                 var->joins)
 
   (def n (xt/start-node {}))
-  (xt/submit-tx n [[::xt/put {:xt/id 1 :data/foo 2}]])
+  (xt/submit-tx n [[::xt/put {:xt/id 1 :data/foo 'foo}]])
 
   (xt/q (xt/db n)
-        '{:find ["foo"]
-          :where [[1 :data/foo 2]
-                  [1 :foo/bar 3]]}
+        '{:find [?e]
+          :where [[?e :data/foo foo]
+                  [(clojure.core/= foo 'foo)]]}
         )
 
   )

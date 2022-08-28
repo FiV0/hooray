@@ -6,7 +6,8 @@
             [hooray.db :as db]
             [hooray.graph :as graph]
             [hooray.util :as util]
-            [hooray.query.spec :as hooray-spec]))
+            [hooray.query.spec :as hooray-spec]
+            [hooray.algo.binary-join :as bj]))
 
 (defn same-triples? [pattern1 pattern2]
   (->> (map #(or (and (util/variable? %1) (util/variable? %2))
@@ -215,18 +216,17 @@
                     [?person :likes pizza]]}
           data))
 
-(defn- ->return-maps [{:keys [keys syms strs]}]
-  (let [ks (or (some->> keys (mapv keyword))
-               (some->> syms (mapv symbol))
-               (some->> strs (mapv str)))]
-    (fn [row]
-      (zipmap ks row))))
+
 
 (defn logic-var? [v]
   (and (simple-symbol? v)
        (comp #(str/starts-with? % "?") name)))
 
-(def literal? (complement logic-var?))
+(defn wildcard? [v] (= v '_))
+
+(defn literal? [v]
+  (not (or (wildcard? v) (logic-var? v)))
+  #_(complement logic-var?))
 
 (defn- vars-from-triple [{:keys [e a v]}]
   (->> [e a v]
@@ -242,7 +242,7 @@
 (defn query-plan [q db]
   (let [var-join-order (var-join-order q db)]
     {:var-join-order var-join-order
-     :var->bindings (into {} (map-indexed (fn [i var] [var i]) var-join-order))}))
+     :var->bindings (zipmap var-join-order (range))}))
 
 (comment
   (def conformed-q (hooray-spec/conform-query '{:find [?name]
@@ -255,26 +255,114 @@
                                                 :limit 12}))
   (query-plan conformed-q nil))
 
-(defn ->unary-index-fn [{}])
+;; index-fn should follow the convention of [opts, next var bound ....]
 
-(defn ->binary-index-fn [{}])
+(defn ->unary-index-fn [{:keys [e a v]} db]
+  (fn [_]
+    (graph/resolve-triple (db/graph db) [e a v])))
 
-(defn ->ternary-index-fn [{}])
+(defn ->binary-index-fn [{:keys [e a v]} db]
+  )
 
-(defn var->joins [q db])
+(defn ->ternary-index-fn [{:keys [e a v]} db]
+  {:pre [(assert (every? logic-var? [e a v]))]}
+
+
+
+  )
+
+(defn order-by-bindings [v var->bindings]
+  (sort-by var->bindings v))
+
+(defn ->index-fn [{:keys [e a v]} var->joins db]
+  (let [vars (-> (filter logic-var? [e a v])
+                 (sort-by ))])
+  )
+
+(defn var->joins [{:keys [where] :as q} db {:keys [var->bindings] :as _q-plan}]
+  (let [triples (->> (filter (comp #{:triple} first) where)
+                     (map second))]))
 
 (defn compile-query [q db]
   (let [q-plan (query-plan q db)]
     (->
-     (query-plan q db)
-     (assoc :var->joins (var->joins q db)))))
+     q-plan
+     #_(assoc :var->joins (var->joins q db q-plan))
+     (assoc :query q))))
 
+(defn find-projection [row find var->binding]
+  (mapv (fn [v]
+          (if (logic-var? v)
+            (nth row (get var->binding v))
+            v))
+        find))
+
+(defn compile-find [{:keys [query var->bindings] :as _compiled_q}]
+  (let [find (:find query)]
+    (if (seq find)
+      ;; #(find-projection % find var->binding)
+      (fn find-projection [row]
+        (mapv (fn [v]
+                (if (logic-var? v)
+                  (nth row (get var->bindings v))
+                  v))
+              find))
+      (throw (ex-info "`find` can't be empty!" {:query query})))))
+
+(defn var-join-order2 [{:keys [where]} db]
+  (->> (mapcat identity where)
+       (filter logic-var?)
+       dedupe))
+
+(defn query-plan2 [q db]
+  (let [var-join-order (var-join-order2 q db)]
+    {:var-join-order var-join-order
+     :var->bindings (zipmap var-join-order (range))}))
+
+(defn compile-query2 [q db]
+  (let [q-plan (query-plan2 q db)]
+    (-> q-plan
+        (assoc :query q))))
+
+(defn- ->return-maps [{:keys [keys syms strs]}]
+  (let [ks (or (some->> keys (mapv keyword))
+               (some->> syms (mapv symbol))
+               (some->> strs (mapv str)))]
+    (fn [row]
+      (zipmap ks row))))
 
 (defn query [q db]
-  (let [conformed-q (hooray-spec/conform-query q)
-        q-plan (query-plan conformed-q db)]
+  (let [#_#_conformed-q (hooray-spec/conform-query q)
+        compiled-q (compile-query2 q db)
+        find-fn (compile-find compiled-q)
+        return-maps? (seq (select-keys q [:keys :syms :strs]))]
+    (cond->> (bj/join compiled-q db)
+      true (map find-fn)
+      return-maps? (map (->return-maps q)))))
+
+(comment
+  (require '[clojure.edn :as edn]
+           '[hooray.db :as db]
+           '[hooray.graph :as g])
+
+  (defn wrap-in-adds [tx-data]
+    (map #(vector :db/add %) tx-data))
+
+  (def conn (db/connect "hooray:mem://data"))
+  (def data (edn/read-string (slurp "resources/transactions.edn")))
+  (db/transact conn data)
+
+  (defn db [] (db/db conn))
+
+  (query '{:find [?name ?album]
+           :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+                   [?t :track/album ?album]
+                   [?album :album/artist ?artist]
+                   [?artist :artist/name ?name]]
+           :keys [name album]}
+         (db))
+
+  (g/resolve-triple  (:graph (db)) '[?t :track/name "For Those About To Rock (We Salute You)" ])
 
 
-
-    )
   )

@@ -17,6 +17,7 @@ java -jar target/lib-0.1.4.jar :arg1 :arg2
 ### Glossary
 
 * triple - generally refers to an [e a v] triple, sometimes also in a different order
+* pattern - refers to a non yet instantiated triple, could contain variables but does not have to
 * clause - more generally a where clause. Could be a triple but maybe also a different kind of clause.
 
 ## License

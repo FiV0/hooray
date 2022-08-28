@@ -76,7 +76,7 @@
       (update-vals first)))
 
 (defn transact [graph tx-data ts]
-  (let [triples (map #(transaction->triples % ts) tx-data)]
+  (let [triples (mapcat #(transaction->triples % ts) tx-data)]
     (insert-triples graph triples)))
 
 (comment
@@ -86,6 +86,11 @@
                     (take 3)))
 
   (def g (insert-triples (memory-graph) triples))
+  (transact (memory-graph) [{:foo/data 1}] (util/now))
+
+  (get-from-index g '[?a ?b ?c])
+
+
 
   (def retraction (vector 0 1 2 nil false))
 
@@ -107,38 +112,38 @@
 (defmethod get-from-index '[? ? :v]
   [{index :vea} [_ _ v]]
   (for [e (keys (index v)) a ((index v) e)]
-    [e a v]))
+    [e a]))
 
 (defmethod get-from-index '[? :v ?]
   [{index :ave} [_ a _]]
   (for [v (keys (index a)) e ((index a) v)]
-    [e a v]))
+    [e v]))
 
 (defmethod get-from-index '[:v ? ?]
   [{index :eav} [e _ _]]
   (for [a (keys (index e)) v ((index e) a)]
-    [e a v]))
+    [a v]))
 
 (defmethod get-from-index '[? :v :v]
   [{index :ave} [_ a v]]
   (for [e (get-in index [a v])]
-    [e a v]))
+    [e]))
 
 (defmethod get-from-index '[:v ? :v]
   [{index :vea} [e _ v]]
   (for [a (get-in index [v e])]
-    [e a v]))
+    [a]))
 
 (defmethod get-from-index '[:v :v ?]
   [{index :eav } [e a _]]
   (for [v (get-in index [e a])]
-    [e a v]))
+    [v]))
 
 ;; a nil v value is a problem
 (defmethod get-from-index '[:v :v :v]
   [{index :eav} [e a v]]
   (if ((get-in index [e a]) v)
-    [[e a v]]
+    [[]]
     []))
 
 (def ^:private binary-index-remap

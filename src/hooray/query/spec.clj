@@ -61,6 +61,13 @@
                         :explain (s/explain-data ::query query)})))
     conformed-query))
 
+(defn wildcard? [v] (= v '_))
+
+(defn wildcard-var [_] (gensym "?wildcard"))
+
+(defn replace-wildcard [where-clause]
+  (mapv #(cond-> % wildcard? (wildcard-var)) where-clause))
+
 
 (comment
   (conform-query '{:find [?name]
