@@ -21,8 +21,7 @@
   )
 
 (defprotocol GraphIndex
-  (resolve-singleton [this type singleton])
-  (resolve-two-tuple [this type tuple]))
+  (resolve-tuple [this tuple]))
 
 (defprotocol BitempGraph
   (in-between [this t1 t2] "Creates a graph with only facts "))

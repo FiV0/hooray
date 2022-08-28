@@ -38,7 +38,7 @@
                 var->joins)
 
   (def n (xt/start-node {}))
-  (xt/submit-tx n [[::xt/put {:xt/id 1 :data/foo 'foo}]])
+  (xt/submit-tx n [[::xt/put {:xt/id {:foo :bar} :data/foo 'foo}]])
 
   (xt/q (xt/db n)
         '{:find [?e]

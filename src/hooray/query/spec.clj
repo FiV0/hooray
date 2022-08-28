@@ -40,7 +40,13 @@
 
 (comment
   (s/conform ::triple '[?t :track/album ?album])
-  (s/conform ::triple '[_ :track/album ?album]))
+  (s/conform ::triple '[_ :track/album ?album])
+
+  (s/valid? ::triple '[_ :track/album ?album]))
+
+(s/def ::triple-order
+  (s/and (s/coll-of #{:e :a :v} :distinct true :kind vector? :min-count 1 :max-count 3)
+         (s/conformer identity vec)))
 
 (s/def ::term (s/or :triple ::triple))
 
