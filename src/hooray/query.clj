@@ -290,17 +290,10 @@
      #_(assoc :var->joins (var->joins q db q-plan))
      (assoc :query q))))
 
-(defn find-projection [row find var->binding]
-  (mapv (fn [v]
-          (if (logic-var? v)
-            (nth row (get var->binding v))
-            v))
-        find))
 
 (defn compile-find [{:keys [query var->bindings] :as _compiled_q}]
   (let [find (:find query)]
     (if (seq find)
-      ;; #(find-projection % find var->binding)
       (fn find-projection [row]
         (mapv (fn [v]
                 (if (logic-var? v)
