@@ -221,3 +221,12 @@
     (if (seq (get index v1))
       [[]]
       [])))
+
+(comment
+  (def g (transact (memory-graph) [{:type :the-first :data 2} {:type :the-second :data 3}] (util/now)))
+
+
+  (get-from-index g {:triple ['?e (hash :type) '?t]
+                     :triple-order [:e :a :v]})
+
+  )
