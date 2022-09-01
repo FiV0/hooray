@@ -143,12 +143,9 @@
 
 (ns-unmap *ns* 'get-from-index)
 
-(defmulti get-from-index (fn [graph {:keys [triple] :as _tuple}]
-                           (println triple)
-                           (simplify triple)))
+(defmulti get-from-index (fn [graph {:keys [triple] :as _tuple}] (simplify triple)))
 
-(defmethod get-from-index :default
-  [_ tuple]
+(defmethod get-from-index :default [_ tuple]
   (throw (ex-info "No method found for tuple!" {:tuple tuple})))
 
 (defmethod get-from-index '[? ? ?]
@@ -177,7 +174,7 @@
       [v2 v3])))
 
 (defmethod get-from-index '[? :v :v]
-  [graph {[t1 t2 t3] :triple-order [_ v2 v3] :triple :as _tuple}][]
+  [graph {[t1 t2 t3] :triple-order [_ v2 v3] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t2) (name t3) (name t1))))]
     (for [v1 (get-in index [v2 v3])]
       [v1])))
@@ -269,6 +266,46 @@
   (require 'hooray.db.memory.graph-index :reload)
 
   )
+
+(defmulti get-index (fn [graph {:keys [triple] :as _tuple}] (simplify triple)))
+
+(defmethod get-index :default [_ tuple]
+  (throw (ex-info "No method found for tuple!" {:tuple tuple})))
+
+(defn triple-order->index [[t1 t2 t3]])
+
+(defmethod get-index '[? ? ?]
+  [graph {[t1 t2 t3] :triple-order :as _tuple}]
+  (get graph (keyword (str (name t1) (name t2) (name t3)))))
+
+(defmethod get-index '[? ? :v]
+  [graph {[t1 t2 t3] :triple-order [_ _ v3] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t3) (name t1) (name t2))) v3]))
+
+(defmethod get-index '[? :v ?]
+  [graph {[t1 t2 t3] :triple-order [_ v2 _] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t2) (name t1) (name t3))) v2]))
+
+(defmethod get-index '[:v ? ?]
+  [graph {[t1 t2 t3] :triple-order [v1 _ _] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t1) (name t2) (name t3))) v1]))
+
+(defmethod get-index '[? :v :v]
+  [graph {[t1 t2 t3] :triple-order [_ v2 v3] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t2) (name t3) (name t1))) v2 v3]))
+
+(defmethod get-index '[:v ? :v]
+  [graph {[t1 t2 t3] :triple-order [v1 _ v3] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t1) (name t3) (name t2))) v1 v3]))
+
+(defmethod get-index '[:v :v ?]
+  [graph {[t1 t2 t3] :triple-order [v1 v2 _] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t1) (name t2) (name t3))) v1 v2]))
+
+;; a nil v value is a problem
+(defmethod get-index '[:v :v :v]
+  [graph {[t1 t2 t3] :triple-order [v1 v2 v3] :triple :as _tuple}]
+  (throw (ex-info "todo" {})))
 
 ;; maybe do a stateful and non-stateful version
 
