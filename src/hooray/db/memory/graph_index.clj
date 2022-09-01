@@ -1,11 +1,12 @@
 (ns hooray.db.memory.graph-index
-  (:refer-clojure :exclude [hash])
-  (:require [hooray.util :as util :refer [dissoc-in]]
+  (:refer-clojure :exclude [hash key next])
+  (:require [clojure.set]
+            [clojure.spec.alpha :as s]
+            [clojure.data.avl :as avl]
             [hooray.datom :as datom]
             [hooray.graph :as graph]
-            [clojure.spec.alpha :as s]
             [hooray.query.spec :as h-spec]
-            [clojure.set]))
+            [hooray.util :as util :refer [dissoc-in]]))
 
 (s/def ::tuple (s/and (s/keys :req-un [::h-spec/triple ::h-spec/triple-order])
                       (fn [{:keys [triple triple-order]}] (= (count triple) (count triple-order)))))
@@ -15,6 +16,10 @@
                      :triple-order '[:e :a]})
 
   )
+
+;; TODO
+;; add avl version
+;; use avl transient during construction
 
 (defn hash [v] (clojure.core/hash v))
 
@@ -37,6 +42,18 @@
   (resolve-tuple [this tuple]
     (s/assert ::tuple tuple)
     (get-from-index-unary this tuple)))
+
+(defn sorted-set* [type]
+  (case type
+    :core (sorted-set)
+    :avl (avl/sorted-set)
+    (throw (ex-info "No such sorted-set type!" {:type type}))))
+
+(defn sorted-map* [type]
+  (case type
+    :core (sorted-map)
+    :avl (avl/sorted-map)
+    (throw (ex-info "No such sorted-map type!" {:type type}))))
 
 (defn memory-graph [] (->MemoryGraphIndexed (sorted-map) (sorted-map) (sorted-map)
                                             (sorted-map) (sorted-map) (sorted-map) {}))
@@ -116,38 +133,47 @@
 
   (def retraction (vector 0 1 2 nil false))
 
-  (index-triples g [retraction]))
+  (index-triples g [retraction])
+
+  )
 
 ;; pretty much one to one copied from asami
 ;; TODO optimize for not returning constant columns
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
 
-(defmulti get-from-index (fn [index {:keys [triple] :as _tuple}] (simplify triple)))
+(ns-unmap *ns* 'get-from-index)
 
-;; 6 * 8 + 4 * 4 + 3 multimethods !!!
+(defmulti get-from-index (fn [graph {:keys [triple] :as _tuple}]
+                           (println triple)
+                           (simplify triple)))
+
+(defmethod get-from-index :default
+  [_ tuple]
+  (throw (ex-info "No method found for tuple!" {:tuple tuple})))
 
 (defmethod get-from-index '[? ? ?]
   [graph {[t1 t2 t3] :triple-order :as _tuple}]
   (let [index (get graph (keyword (str (name t1) (name t2) (name t3))))]
-    (for [v1 (keys index) v2 (index v1) v3 (get-in index [v1 v2])]
+    (for [v1 (keys index) v2 (keys (index v1)) v3 (get-in index [v1 v2])]
       [v1 v2 v3])))
 
 (defmethod get-from-index '[? ? :v]
   [graph {[t1 t2 t3] :triple-order [_ _ v3] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t3) (name t1) (name t2))))]
-    (for [v1 (index v3) v2 (get-in index [v3 v1])]
+    (for [v1 (keys (index v3)) v2 (get-in index [v3 v1])]
       [v1 v2])))
 
 (defmethod get-from-index '[? :v ?]
   [graph {[t1 t2 t3] :triple-order [_ v2 _] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t2) (name t1) (name t3))))]
-    (for [v1 (index v2) v3 (get-in index [v2 v1])]
-      [v1 v3])))
+    (for [v1 (keys (index v2)) v3 (get-in index [v2 v1])]
+      (do (println v1 v3)
+          [v1 v3]))))
 
 (defmethod get-from-index '[:v ? ?]
   [graph {[t1 t2 t3] :triple-order [v1 _ _] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t1) (name t2) (name t3))))]
-    (for [v2 (index v1) v3 (get-in index [v1 v2])]
+    (for [v2 (keys (index v1)) v3 (get-in index [v1 v2])]
       [v2 v3])))
 
 (defmethod get-from-index '[? :v :v]
@@ -185,19 +211,19 @@
 (defmethod get-from-index '[? ?]
   [graph {[t1 t2] :triple-order :as _tuple}]
   (let [index (get graph (keyword (str (name t1) (name t2) (name (first (missing #{t1 t2}))))))]
-    (for [v1 (keys index) v2 (index v1)]
+    (for [v1 (keys index) v2 (keys (index v1))]
       [v1 v2])))
 
 (defmethod get-from-index '[? :v]
   [graph {[t1 t2] :triple-order [_ v2] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t2) (name t1) (name (first (missing #{t1 t2}))))))]
-    (for [v1 (index v2)]
+    (for [v1 (keys (index v2))]
       [v1])))
 
 (defmethod get-from-index '[:v ?]
   [graph {[t1 t2] :triple-order [v1 _] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t1) (name t2) (name (first (missing #{t1 t2}))))))]
-    (for [v2 (index v1)]
+    (for [v2 (keys (index v1))]
       [v2])))
 
 (defmethod get-from-index '[:v :v]
@@ -229,4 +255,35 @@
   (get-from-index g {:triple ['?e (hash :type) '?t]
                      :triple-order [:e :a :v]})
 
+  (get-from-index g {:triple [(hash #uuid "3a3e3530-73f1-4e63-8379-7e1e3ab0e664") (hash :type) '?t]
+                     :triple-order [:e :a :v]})
+
+
+  (get-from-index g {:triple [(hash :type) '?t]
+                     :triple-order [:a :v]})
+
+  (get-from-index g {:triple ['?e]
+                     :triple-order [:e]})
+
+
+  (require 'hooray.db.memory.graph-index :reload)
+
   )
+
+;; maybe do a stateful and non-stateful version
+
+(defprotocol LeapIterator
+  (key [this])
+  (next [this])
+  (seek [this k])
+  (at-end? [this]))
+
+(defprotocol LeapLevels
+  (open [this])
+  (up [this]))
+
+(defrecord SimpleIterator [data stack depth max-depth])
+
+(defrecord LeapIteratorCore [index stack depth max-depth])
+
+(defrecord LeapIteratorAVL [index stack depth max-depth])
