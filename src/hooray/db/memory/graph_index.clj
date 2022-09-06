@@ -307,7 +307,7 @@
   [graph {[t1 t2 t3] :triple-order [v1 v2 v3] :triple :as _tuple}]
   (throw (ex-info "todo" {})))
 
-;; maybe do a stateful and non-stateful version
+;; FIXME maybe do a stateful and non-stateful version
 
 (defprotocol LeapIterator
   (key [this])
@@ -319,7 +319,32 @@
   (open [this])
   (up [this]))
 
-(defrecord SimpleIterator [data stack depth max-depth])
+(defrecord SimpleIterator [data prefix depth max-depth]
+  LeapIterator
+  (key [this] (first data))
+
+  (next [this] (->SimpleIterator (rest data) prefix depth max-depth))
+
+  (seek [this k]
+    (let [kk (conj prefix k)]
+      (->SimpleIterator (drop-while #(<= (compare % kk) -1) data) prefix depth max-depth)))
+
+  (at-end? [this] (or (empty? data) (<= (compare prefix (take (count prefix) (first data))))))
+
+  LeapLevels
+  (open [this]
+    (assert (< (inc depth) max-depth))
+    (->SimpleIterator data (conj prefix (nth (first data) depth)) (inc depth) max-depth))
+
+  (up [this]
+    (assert (> depth 0))
+    (->SimpleIterator data (pop prefix) (dec depth) max-depth)))
+
+(defn ->simple-iterator [data]
+  (->SimpleIterator data [] 0 (count (first data))))
+
+(defn tuple->simple-iterator [graph tuple]
+  (->simple-iterator (get-from-index graph tuple)))
 
 (defrecord LeapIteratorCore [index stack depth max-depth])
 
