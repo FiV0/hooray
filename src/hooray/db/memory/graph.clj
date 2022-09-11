@@ -21,9 +21,9 @@
   (resolve-triple [this triple] (get-from-index this triple))
   (transact [this tx-data ts] (transact this tx-data ts))
 
-  graph/GraphIndex
-  (resolve-singleton [this type singleton] (get-from-index-unary this type singleton))
-  (resolve-two-tuple [this type tuple] (get-from-index-unary this type tuple)))
+  #_graph/GraphIndex
+  #_(resolve-singleton [this type singleton] (get-from-index-unary this type singleton))
+  #_(resolve-two-tuple [this type tuple] (get-from-index-unary this type tuple)))
 
 (defn memory-graph []
   (->MemoryGraph {} {} {}))

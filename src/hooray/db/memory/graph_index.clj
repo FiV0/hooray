@@ -15,19 +15,27 @@
   (s/valid? ::tuple {:triple '[?e :foo/bar]
                      :triple-order '[:e :a]})
 
+  (def tuple (s/conform ::tuple {:triple '[?e :foo/bar]
+                                 :triple-order '[:e :a]}) )
+
+
+
+
   )
 
 ;; TODO
 ;; add avl version
-;; use avl transient during construction
+;; add transients during construction
 
 (defn hash [v] (clojure.core/hash v))
 
 (declare memory-graph)
 (declare get-from-index)
-(declare get-from-index-unary)
-(declare get-from-index-binary)
 (declare transact)
+(declare get-from-index)
+(declare get-iterator*)
+
+(def ^:private iterator-types #{:simple :core :avl})
 
 (defrecord MemoryGraphIndexed [eav eva ave aev vea vae doc-store opts]
   graph/Graph
@@ -38,12 +46,20 @@
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
   (resolve-triple [this triple] (throw (ex-info "todo" {})) #_(get-from-index this triple))
+
+  (transact [this tx-data] (transact this tx-data (util/now)))
   (transact [this tx-data ts] (transact this tx-data ts))
 
   graph/GraphIndex
   (resolve-tuple [this tuple]
     (s/assert ::tuple tuple)
-    (get-from-index-unary this tuple)))
+    (get-from-index this tuple))
+
+  (get-iterator
+    [this tuple] (graph/get-iterator this tuple :simple)
+    [this tuple type]
+    )
+  )
 
 (defn sorted-set* [type]
   (case type
@@ -62,6 +78,7 @@
                         (sorted-map* type) (sorted-map* type) (sorted-map* type)
                         {} opts))
 
+;; TODO maybe assert :db/id
 (defn- map->triples [m ts]
   (let [eid (or (:db/id m) (random-uuid))]
     (->> (dissoc m :db/id)
@@ -73,7 +90,7 @@
     (= :db/add (first transaction)) [(vec (concat (rest transaction) [ts true]))]
     (= :db/retract (first transaction)) [(vec (concat (rest transaction) [ts false]))]))
 
-(def ^:private index-types [:ea :ae :ev :ve :av :va])
+(def ^:private index-types #{:ea :ae :ev :ve :av :va})
 
 (defn ->hash-triple [triple]
   (mapv hash (take 3 triple)))
@@ -251,7 +268,7 @@
       [])))
 
 (comment
-  (def g (transact (memory-graph) [{:type :the-first :data 2} {:type :the-second :data 3}] (util/now)))
+  (def g (transact (memory-graph {:type :core}) [{:type :the-first :data 2} {:type :the-second :data 3}] (util/now)))
 
 
   (get-from-index g {:triple ['?e (hash :type) '?t]
@@ -327,9 +344,10 @@
 
 (defrecord SimpleIterator [data prefix depth max-depth]
   LeapIterator
-  (key [this] (first data))
+  (key [this] (nth (first data) depth))
 
-  (next [this] (->SimpleIterator (rest data) prefix depth max-depth))
+  (next [this]
+    (->SimpleIterator (rest data) prefix depth max-depth))
 
   (seek [this k]
     (let [kk (conj prefix k)]
@@ -427,3 +445,11 @@
 (defn ->leap-iterator-avl [index max-depth]
   {:pre [(assert (avl-index? index))]}
   (->LeapIteratorCore (seq index) [] 0 max-depth))
+
+(defn get-iterator* [graph {:keys [triple] :as tuple} type]
+  {:pre [(s/assert ::tuple tuple) (assert (iterator-types type))]}
+  (case type
+    :simple (->simple-iterator (get-from-index graph tuple))
+    :core (->leap-iterator-core (get-index graph tuple) (count (h-spec/triple->logic-vars triple)))
+    :avl (->leap-iterator-avl (get-index graph tuple) (count (h-spec/triple->logic-vars triple)))
+    (throw (ex-info "todo" {}))))

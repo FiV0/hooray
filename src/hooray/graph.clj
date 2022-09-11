@@ -1,5 +1,4 @@
-(ns ^{:doc "The graph index API."
-      :author "Paula Gearon"}
+(ns ^{:doc "The graph index API."}
     hooray.graph)
 
 (defprotocol Graph
@@ -21,7 +20,10 @@
   )
 
 (defprotocol GraphIndex
-  (resolve-tuple [this tuple]))
+  (resolve-tuple [this tuple])
+  (get-iterator
+    [this tuple]
+    [this tuple type]))
 
 (defprotocol BitempGraph
   (in-between [this t1 t2] "Creates a graph with only facts "))

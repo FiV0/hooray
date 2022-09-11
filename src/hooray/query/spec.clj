@@ -74,6 +74,9 @@
 (defn replace-wildcard [where-clause]
   (mapv #(cond-> % wildcard? (wildcard-var)) where-clause))
 
+(defn triple->logic-vars [triple]
+  (->> (vals triple)
+       (filter (comp #{:logic-var} first))))
 
 (comment
   (conform-query '{:find [?name]

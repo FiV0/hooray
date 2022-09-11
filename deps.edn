@@ -10,8 +10,8 @@
    :git/sha "22520d57bffbb564a9d7e08b310519661f5fd18e"}
   #_{:mvn/version "0.1.2"}
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
-  org.clojure/data.avl                {:mvn/version "0.1.0"}
-  }
+  org.clojure/data.avl                #_{:mvn/version "0.1.0"}
+  {:local/root "/home/fv/src/github.com/FiV0/data.avl/"}}
 
  :aliases
  {:dev
