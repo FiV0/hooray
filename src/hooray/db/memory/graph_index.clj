@@ -29,9 +29,11 @@
 (declare get-from-index-binary)
 (declare transact)
 
-(defrecord MemoryGraphIndexed [eav eva ave aev vea vae doc-store]
+(defrecord MemoryGraphIndexed [eav eva ave aev vea vae doc-store opts]
   graph/Graph
-  (new-graph [this] (memory-graph))
+  (new-graph [this] (memory-graph {:type :core}))
+  (new-graph [this opts] (memory-graph opts))
+
   (graph-add [this triple] (throw (ex-info "todo" {})))
   (graph-delete [this triple] (throw (ex-info "todo" {})))
   (graph-transact [this tx-id assertions retractions] (throw (ex-info "todo" {})))
@@ -55,8 +57,10 @@
     :avl (avl/sorted-map)
     (throw (ex-info "No such sorted-map type!" {:type type}))))
 
-(defn memory-graph [] (->MemoryGraphIndexed (sorted-map) (sorted-map) (sorted-map)
-                                            (sorted-map) (sorted-map) (sorted-map) {}))
+(defn memory-graph [{:keys [type] :as opts}]
+  (->MemoryGraphIndexed (sorted-map* type) (sorted-map* type) (sorted-map* type)
+                        (sorted-map* type) (sorted-map* type) (sorted-map* type)
+                        {} opts))
 
 (defn- map->triples [m ts]
   (let [eid (or (:db/id m) (random-uuid))]
@@ -77,15 +81,16 @@
 (defn <-hash-triple [{:keys [doc-store] :as _graph} triple]
   (mapv #(get doc-store %) (take 3 triple)))
 
-(defn index-triple-add [graph [e a v :as triple]]
-  (let [[he ha hv] (->hash-triple triple)]
+(defn index-triple-add [{opts :opts :as graph} [e a v :as triple]]
+  (let [type (:type opts)
+        [he ha hv] (->hash-triple triple)]
     (-> graph
-        (update-in [:eav he ha] (fnil conj (sorted-set)) hv)
-        (update-in [:eva he hv] (fnil conj (sorted-set)) ha)
-        (update-in [:ave ha hv] (fnil conj (sorted-set)) he)
-        (update-in [:aev ha he] (fnil conj (sorted-set)) hv)
-        (update-in [:vea hv he] (fnil conj (sorted-set)) ha)
-        (update-in [:vae hv ha] (fnil conj (sorted-set)) he)
+        (update-in [:eav he ha] (fnil conj (sorted-set* type)) hv)
+        (update-in [:eva he hv] (fnil conj (sorted-set* type)) ha)
+        (update-in [:ave ha hv] (fnil conj (sorted-set* type)) he)
+        (update-in [:aev ha he] (fnil conj (sorted-set* type)) hv)
+        (update-in [:vea hv he] (fnil conj (sorted-set* type)) ha)
+        (update-in [:vae hv ha] (fnil conj (sorted-set* type)) he)
         (update :doc-store into [[he e] [ha a] [hv v]]))))
 
 (defn- retract-from-index [graph index [h1 h2 h3]]
@@ -128,8 +133,8 @@
                     (map #(apply vector %))
                     (take 3)))
 
-  (def g (index-triples (memory-graph) triples))
-  (transact (memory-graph) [{:foo/data 1}] (util/now))
+  (def g (index-triples (memory-graph {:type :core}) triples))
+  (transact (memory-graph {:type :core}) [{:foo/data 1}] (util/now))
 
   (def retraction (vector 0 1 2 nil false))
 
@@ -308,6 +313,7 @@
   (throw (ex-info "todo" {})))
 
 ;; FIXME maybe do a stateful and non-stateful version
+;; TODO think about if next should go one level up
 
 (defprotocol LeapIterator
   (key [this])
@@ -329,7 +335,7 @@
     (let [kk (conj prefix k)]
       (->SimpleIterator (drop-while #(<= (compare % kk) -1) data) prefix depth max-depth)))
 
-  (at-end? [this] (or (empty? data) (<= (compare prefix (take (count prefix) (first data))))))
+  (at-end? [this] (or (empty? data) (<= (compare prefix (take (count prefix) (first data))) -1)))
 
   LeapLevels
   (open [this]
@@ -346,6 +352,78 @@
 (defn tuple->simple-iterator [graph tuple]
   (->simple-iterator (get-from-index graph tuple)))
 
-(defrecord LeapIteratorCore [index stack depth max-depth])
+(defn- first-key [index depth max-depth]
+  (if (= depth max-depth)
+    (first index)
+    (ffirst index)))
 
-(defrecord LeapIteratorAVL [index stack depth max-depth])
+(defn- seek-key [index k depth max-depth]
+  (let [key-fn (if (= depth max-depth) identity first)]
+    (loop [l 0 h (dec (count index))]
+      (if (= l h)
+        (if (<= k (key-fn (nth index l)))
+          (subvec index l (count index))
+          [])
+        (let [m (quot (+ l h) 2)]
+          (if (<= k (key-fn (nth index m)))
+            (recur l m)
+            (recur (inc m) h)))))))
+
+(comment
+  (seek-key [1 2 3 4 9 10 12] 3 0 0)
+  (seek-key [1 2 3 4 9 10 12] 13 0 0)
+  (seek-key [1] 13 0 0)
+  (seek-key [0 1] 1 0 0))
+
+(defrecord LeapIteratorCore [index stack depth max-depth]
+  LeapIterator
+  (key [this] (first-key index depth max-depth))
+
+  (next [this] (->LeapIteratorCore (clojure.core/next index) stack depth max-depth))
+
+  (seek [this k]
+    (when (seq index)
+      (->LeapIteratorCore (seek-key index k depth max-depth) stack depth max-depth)))
+
+  (at-end? [this] (empty? index))
+
+  LeapLevels
+  (open [this]
+    (assert (< (inc depth) max-depth))
+    (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth))
+
+  (up [this]
+    (assert (> depth 0))
+    (->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)))
+
+(defn ->leap-iterator-core [index max-depth]
+  (->LeapIteratorCore (vec index) [] 0 max-depth))
+
+(defrecord LeapIteratorAVL [index stack depth max-depth]
+  LeapIterator
+  (key [this] (first-key index depth max-depth))
+
+  (next [this] (->LeapIteratorCore (clojure.core/next index) stack depth max-depth))
+
+  (seek [this k]
+    (when (seq index)
+      (->LeapIteratorCore (avl/seek index k) stack depth max-depth)))
+
+  (at-end? [this] (empty? index))
+
+  LeapLevels
+  (open [this]
+    (assert (< (inc depth) max-depth))
+    (->LeapIteratorCore (-> index first second seq) (conj stack index) (inc depth) max-depth))
+
+  (up [this]
+    (assert (> depth 0))
+    (->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)))
+
+(defn- avl-index? [index]
+  (or (instance? clojure.data.avl.AVLMap index)
+      (instance? clojure.data.avl.AVLSet index)))
+
+(defn ->leap-iterator-avl [index max-depth]
+  {:pre [(assert (avl-index? index))]}
+  (->LeapIteratorCore (seq index) [] 0 max-depth))
