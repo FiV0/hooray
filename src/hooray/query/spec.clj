@@ -58,6 +58,13 @@
   (s/keys :req-un [::find]
           :opt-un [::where ::limit]))
 
+(defn validate-query [query]
+  (if (s/invalid? query)
+    (throw  (ex-info "Malformed query"
+                     {:query query
+                      :explain (s/explain-data ::query query)}))
+    query))
+
 ;; TODO maybe write custom IllegalArgumentException
 (defn conform-query [query]
   (let [conformed-query (s/conform ::query query)]

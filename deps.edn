@@ -12,6 +12,8 @@
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
   org.clojure/data.avl                #_{:mvn/version "0.1.0"}
   {:local/root "/home/fv/src/github.com/FiV0/data.avl/"}}
+  persistent-sorted-set               {:mvn/version "0.1.4"}
+  }
 
  :aliases
  {:dev
