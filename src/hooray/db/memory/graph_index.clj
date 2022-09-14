@@ -163,9 +163,7 @@
 ;; TODO optimize for not returning constant columns
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
 
-(ns-unmap *ns* 'get-from-index)
-
-(defmulti get-from-index (fn [graph {:keys [triple] :as _tuple}] (simplify triple)))
+(defmulti get-from-index (fn [_graph {:keys [triple] :as _tuple}] (simplify triple)))
 
 (defmethod get-from-index :default [_ tuple]
   (throw (ex-info "No method found for tuple!" {:tuple tuple})))
