@@ -5,13 +5,20 @@
   org.clojure/clojure                 {:mvn/version "1.11.1"}
   org.clojure/spec.alpha              {:mvn/version "0.3.218"}
   org.clojure/core.rrb-vector         {:mvn/version "0.1.1"}
-  com.dean/interval-tree              #_{:local/root "../interval-tree"}
+  clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
+  spootnik/unilog                     {:mvn/version "0.7.30"}
+
+  ;; in flux
+  com.dean/interval-tree
   {:git/url "https://github.com/FiV0/interval-tree.git"
    :git/sha "22520d57bffbb564a9d7e08b310519661f5fd18e"}
+  #_{:local/root "../interval-tree"}
   #_{:mvn/version "0.1.2"}
-  clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
-  org.clojure/data.avl                #_{:mvn/version "0.1.0"}
-  {:local/root "/home/fv/src/github.com/FiV0/data.avl/"}}
+
+  org.clojure/data.avl
+  #_{:mvn/version "0.1.0"}
+  {:local/root "/home/fv/src/github.com/FiV0/data.avl/"}
+
   persistent-sorted-set               {:mvn/version "0.1.4"}
   }
 
