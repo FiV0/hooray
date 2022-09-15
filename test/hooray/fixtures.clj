@@ -23,6 +23,6 @@
 (def ^:dynamic *graph-type* nil)
 
 (defn with-chinook-index-graph [f]
-  (binding [*graph* (mem-gi/memory-graph (or *graph-type* :simple))]
+  (binding [*graph* (mem-gi/memory-graph {:type (or *graph-type* :simple)})]
     (g/transact *graph* test-data)
     (f)))

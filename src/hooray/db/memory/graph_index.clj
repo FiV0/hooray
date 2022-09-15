@@ -35,8 +35,6 @@
 (declare get-from-index)
 (declare get-iterator*)
 
-(def ^:private iterator-types #{:simple :core :avl})
-
 (defrecord MemoryGraphIndexed [eav eva ave aev vea vae doc-store opts]
   graph/Graph
   (new-graph [this] (memory-graph {:type :core}))
@@ -56,10 +54,9 @@
     (get-from-index this tuple))
 
   (get-iterator
-    [this tuple] (graph/get-iterator this tuple :simple)
+    [this tuple] (get-iterator* this tuple :simple)
     [this tuple type]
-    )
-  )
+    (get-iterator* this tuple type)))
 
 (defn sorted-set* [type]
   (case type
@@ -78,6 +75,9 @@
                         (sorted-map* type) (sorted-map* type) (sorted-map* type)
                         {} opts))
 
+(comment (graph/get-iterator (memory-graph {:type :core}) (s/conform ::tuple {:triple '[?e ?a ?v]
+                                                                              :triple-order '[:e :a :v]})))
+
 ;; TODO maybe assert :db/id
 (defn- map->triples [m ts]
   (let [eid (or (:db/id m) (random-uuid))]
@@ -90,7 +90,7 @@
     (= :db/add (first transaction)) [(vec (concat (rest transaction) [ts true]))]
     (= :db/retract (first transaction)) [(vec (concat (rest transaction) [ts false]))]))
 
-(def ^:private index-types #{:ea :ae :ev :ve :av :va})
+(def ^:private index-types #{:eav :eva :ave :aev :vea :vae})
 
 (defn ->hash-triple [triple]
   (mapv hash (take 3 triple)))
@@ -443,6 +443,8 @@
 (defn ->leap-iterator-avl [index max-depth]
   {:pre [(assert (avl-index? index))]}
   (->LeapIteratorCore (seq index) [] 0 max-depth))
+
+(def ^:private iterator-types #{:simple :core :avl})
 
 (defn get-iterator* [graph {:keys [triple] :as tuple} type]
   {:pre [(s/assert ::tuple tuple) (assert (iterator-types type))]}
