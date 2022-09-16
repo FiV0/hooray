@@ -1,8 +1,9 @@
 (ns hooray.db.memory.graph-index
   (:refer-clojure :exclude [hash key next])
-  (:require [clojure.set]
+  (:require [clojure.data.avl :as avl]
+            [clojure.set]
             [clojure.spec.alpha :as s]
-            [clojure.data.avl :as avl]
+            [clojure.tools.logging :as log]
             [hooray.datom :as datom]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
@@ -53,10 +54,8 @@
     (s/assert ::tuple tuple)
     (get-from-index this tuple))
 
-  (get-iterator
-    [this tuple] (get-iterator* this tuple :simple)
-    [this tuple type]
-    (get-iterator* this tuple type)))
+  (get-iterator [this tuple] (get-iterator* this tuple :simple))
+  (get-iterator [this tuple type] (get-iterator* this tuple type)))
 
 (defn sorted-set* [type]
   (case type
