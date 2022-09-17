@@ -418,8 +418,13 @@
     (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth))
 
   (up [this]
-    (assert (> depth 0))
-    (->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)))
+    #_(assert (> depth 0))
+    #_(->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)
+    (->LeapIteratorCore (peek index) (pop-empty stack) (dec depth) max-depth))
+
+  (level [this] depth)
+
+  (depth [this] max-depth))
 
 (defn ->leap-iterator-core [index max-depth]
   (->LeapIteratorCore (vec index) [] 0 max-depth))

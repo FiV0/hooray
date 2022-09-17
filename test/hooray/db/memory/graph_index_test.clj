@@ -99,3 +99,24 @@
 
 (comment
   (t/run-test-var #'iteration-test-simple-iterator))
+
+(deftest iteration-test-core-iterator
+  (testing "correctness of iterator implementations"
+    (let [tdata (test-data 1000)
+          tgraph (test-graph tdata)
+          it (g/get-iterator tgraph tuple-3-vars :core)
+          it-index->data (loop [res {} it it]
+                           (let [level (mem-gi/level it)]
+                             (if (= -1 level)
+                               res
+                               (recur (update res level (fnil conj []) (mem-gi/key it))
+                                      (if (= (inc level) (mem-gi/depth it))
+                                        (move-to-next it)
+                                        (mem-gi/open it))))))]
+      (is (instance? SimpleIterator it))
+      (is (= (get it-index->data 0) (map first tdata)))
+      (is (= (get it-index->data 1) (map second tdata)))
+      (is (= (get it-index->data 2) (map third tdata))))))
+
+(comment
+  (t/run-test-var #'iteration-test-core-iterator))
