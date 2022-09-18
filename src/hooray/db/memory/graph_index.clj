@@ -416,7 +416,7 @@
 
   (next [this]
     (if-not (at-end? this)
-      (->LeapIteratorCore (clojure.core/next index) stack depth max-depth)
+      (->LeapIteratorCore (subvec index 1) stack depth max-depth)
       this))
 
   (seek [this k]
@@ -460,7 +460,11 @@
 
   (up [this]
     #_(assert (> depth 0))
-    (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth)))
+    (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth))
+
+  (level [this] depth)
+
+  (depth [this] max-depth))
 
 (defn- avl-index? [index]
   (or (instance? clojure.data.avl.AVLMap index)
