@@ -9,7 +9,9 @@
             [hooray.graph :as g]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util :refer [dissoc-in]])
-  (:import (hooray.db.memory.graph_index SimpleIterator LeapIteratorCore)))
+  (:import (hooray.db.memory.graph_index SimpleIterator LeapIteratorCore LeapIteratorAVL)))
+
+(t/use-fixtures :once fix/with-identity-hash-index-graph)
 
 (comment
   (t/use-fixtures :once fix/with-chinook-index-graph)
@@ -30,7 +32,6 @@
   #_(s/conform ::mem-gi/tuple {:triple '[?a]
                                :triple-order '[:a]}))
 
-(alter-var-root #'mem-gi/hash (constantly identity))
 
 (comment
   (def tx-data (->> (range 10)
@@ -57,10 +58,12 @@
   (->> (range n)
        (partition 3)))
 
-(defn- test-graph [data]
-  (let [tx-data (map #(into [:db/add] %) data)]
-    (-> (mem-gi/memory-graph {:type :core})
-        (g/transact tx-data))))
+(defn- test-graph
+  ([data] (test-graph data :core))
+  ([data g-type]
+   (let [tx-data (map #(into [:db/add] %) data)]
+     (-> (mem-gi/memory-graph {:type g-type})
+         (g/transact tx-data)))))
 
 (def pos-or-zero? (complement neg?))
 
@@ -96,7 +99,7 @@
                                res
                                (recur (update res level (fnil conj []) (mem-gi/key it))
                                       (move-to-next it)))))]
-      (is (instance? SimpleIterator it))
+      #_(is (instance? SimpleIterator it))
       (is (= (get it-index->data 0) (map first tdata)))
       (is (= (get it-index->data 1) (map second tdata)))
       (is (= (get it-index->data 2) (map third tdata))))))
@@ -115,10 +118,29 @@
                                res
                                (recur (update res level (fnil conj []) (mem-gi/key it))
                                       (move-to-next it)))))]
-      (is (instance? LeapIteratorCore it))
+      #_(is (instance? LeapIteratorCore it))
       (is (= (get it-index->data 0) (map first tdata)))
       (is (= (get it-index->data 1) (map second tdata)))
       (is (= (get it-index->data 2) (map third tdata))))))
 
 (comment
   (t/run-test-var #'iteration-test-core-iterator))
+
+(deftest iteration-test-avl-iterator
+  (testing "correctness of iterator implementations"
+    (let [tdata (test-data 1000)
+          tgraph (test-graph tdata :avl)
+          it (g/get-iterator tgraph tuple-3-vars :avl)
+          it-index->data (loop [res {} it it]
+                           (let [level (mem-gi/level it)]
+                             (if (= -1 level)
+                               res
+                               (recur (update res level (fnil conj []) (mem-gi/key it))
+                                      (move-to-next it)))))]
+      #_(is (instance? LeapIteratorAVL it))
+      (is (= (get it-index->data 0) (map first tdata)))
+      (is (= (get it-index->data 1) (map second tdata)))
+      (is (= (get it-index->data 2) (map third tdata))))))
+
+(comment
+  (t/run-test-var #'iteration-test-avl-iterator))

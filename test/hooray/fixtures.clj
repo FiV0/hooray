@@ -26,3 +26,9 @@
   (binding [*graph* (mem-gi/memory-graph {:type (or *graph-type* :simple)})]
     (g/transact *graph* test-data)
     (f)))
+
+(defn with-identity-hash-index-graph [f]
+  (let [old mem-gi/hash]
+    (alter-var-root #'mem-gi/hash (constantly identity))
+    (f)
+    (alter-var-root #'mem-gi/hash (constantly old))))

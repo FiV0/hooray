@@ -440,7 +440,7 @@
     (when (seq index)
       (->LeapIteratorCore (avl/seek index k) stack depth max-depth)))
 
-  (at-end? [this] (empty? index))
+  (at-end? [this] (empty? (rest index)))
 
   LeapLevels
   (open [this]
@@ -448,15 +448,15 @@
     (->LeapIteratorCore (-> index first second seq) (conj stack index) (inc depth) max-depth))
 
   (up [this]
-    (assert (> depth 0))
-    (->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)))
+    #_(assert (> depth 0))
+    (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth)))
 
 (defn- avl-index? [index]
   (or (instance? clojure.data.avl.AVLMap index)
       (instance? clojure.data.avl.AVLSet index)))
 
 (defn ->leap-iterator-avl [index max-depth]
-  {:pre [(assert (avl-index? index))]}
+  {:pre [(avl-index? index)]}
   (->LeapIteratorCore (seq index) [] 0 max-depth))
 
 (def ^:private iterator-types #{:simple :core :avl})
