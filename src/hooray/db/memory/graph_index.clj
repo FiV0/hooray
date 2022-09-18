@@ -355,7 +355,9 @@
     (let [kk (conj prefix k)]
       (->SimpleIterator (drop-while #(<= (compare % kk) -1) data) prefix depth max-depth)))
 
-  (at-end? [this] (or (empty? (rest data)) (<= (compare prefix (subvec (second data) 0 (count prefix))) -1)))
+  (at-end? [this]
+    (or (empty? (rest data)) (<= (compare prefix (subvec (second data) 0 (count prefix))) -1))
+    #_(or (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1)))
 
   LeapLevels
   (open [this]
@@ -378,7 +380,7 @@
   (->simple-iterator (get-from-index graph tuple)))
 
 (defn- first-key [index depth max-depth]
-  (if (= depth max-depth)
+  (if (= (inc depth) max-depth)
     (first index)
     (ffirst index)))
 
@@ -410,7 +412,7 @@
     (when (seq index)
       (->LeapIteratorCore (seek-key index k depth max-depth) stack depth max-depth)))
 
-  (at-end? [this] (empty? index))
+  (at-end? [this] (empty? (rest index)))
 
   LeapLevels
   (open [this]
@@ -419,8 +421,7 @@
 
   (up [this]
     #_(assert (> depth 0))
-    #_(->LeapIteratorCore (peek index) (pop stack) (dec depth) max-depth)
-    (->LeapIteratorCore (peek index) (pop-empty stack) (dec depth) max-depth))
+    (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth))
 
   (level [this] depth)
 
@@ -464,6 +465,6 @@
   {:pre [(s/assert ::tuple tuple) (iterator-types type)]}
   (case type
     :simple (->simple-iterator (get-from-index graph tuple))
-    :core (->leap-iterator-core (get-index graph tuple) (count (h-spec/triple->logic-vars triple)))
-    :avl (->leap-iterator-avl (get-index graph tuple) (count (h-spec/triple->logic-vars triple)))
+    :core (->leap-iterator-core (get-index graph tuple) (count triple))
+    :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
     (throw (ex-info "todo" {}))))

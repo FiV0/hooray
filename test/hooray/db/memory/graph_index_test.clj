@@ -9,7 +9,7 @@
             [hooray.graph :as g]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util :refer [dissoc-in]])
-  (:import (hooray.db.memory.graph_index SimpleIterator)))
+  (:import (hooray.db.memory.graph_index SimpleIterator LeapIteratorCore)))
 
 (comment
   (t/use-fixtures :once fix/with-chinook-index-graph)
@@ -33,8 +33,6 @@
 (alter-var-root #'mem-gi/hash (constantly identity))
 
 (comment
-  (mem-gi/hash 1)
-
   (def tx-data (->> (range 10)
                     (partition 3)
                     (map #(into [:db/add] %))))
@@ -42,7 +40,7 @@
   (def g (-> (mem-gi/memory-graph {:type :core})
              (g/transact tx-data)))
 
-  (def it (g/get-iterator g tuple-3-vars))
+  (def it (g/get-iterator g tuple-3-vars :simple))
 
   (loop [res {} it it]
     (let [level (mem-gi/level it)]
@@ -72,10 +70,18 @@
     it))
 
 (defn- move-to-next [it]
-  (let [it (move-up it)]
-    (if (neg? (mem-gi/level it))
-      it
-      (mem-gi/next it))))
+  (let [level (mem-gi/level it)]
+    (cond (< (inc level) (mem-gi/depth it))
+          (mem-gi/open it)
+
+          (mem-gi/at-end? it)
+          (let [it (move-up it)]
+            (if (neg? (mem-gi/level it))
+              it
+              (mem-gi/next it)))
+
+          :else
+          (mem-gi/next it))))
 
 (defn third [s] (nth s 2))
 
@@ -89,9 +95,7 @@
                              (if (= -1 level)
                                res
                                (recur (update res level (fnil conj []) (mem-gi/key it))
-                                      (if (= (inc level) (mem-gi/depth it))
-                                        (move-to-next it)
-                                        (mem-gi/open it))))))]
+                                      (move-to-next it)))))]
       (is (instance? SimpleIterator it))
       (is (= (get it-index->data 0) (map first tdata)))
       (is (= (get it-index->data 1) (map second tdata)))
@@ -110,10 +114,8 @@
                              (if (= -1 level)
                                res
                                (recur (update res level (fnil conj []) (mem-gi/key it))
-                                      (if (= (inc level) (mem-gi/depth it))
-                                        (move-to-next it)
-                                        (mem-gi/open it))))))]
-      (is (instance? SimpleIterator it))
+                                      (move-to-next it)))))]
+      (is (instance? LeapIteratorCore it))
       (is (= (get it-index->data 0) (map first tdata)))
       (is (= (get it-index->data 1) (map second tdata)))
       (is (= (get it-index->data 2) (map third tdata))))))
