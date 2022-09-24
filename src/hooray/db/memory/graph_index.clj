@@ -70,13 +70,16 @@
     :avl (avl/sorted-map)
     (throw (ex-info "No such sorted-map type!" {:type type}))))
 
-(defn memory-graph [{:keys [type] :as opts}]
-  (->MemoryGraphIndexed (sorted-map* type) (sorted-map* type) (sorted-map* type)
-                        (sorted-map* type) (sorted-map* type) (sorted-map* type)
-                        {} opts))
+(defn memory-graph
+  ([] (memory-graph {:type :core}))
+  ([{:keys [type] :as opts}]
+   (->MemoryGraphIndexed (sorted-map* type) (sorted-map* type) (sorted-map* type)
+                         (sorted-map* type) (sorted-map* type) (sorted-map* type)
+                         {} opts)))
 
-(comment (graph/get-iterator (memory-graph {:type :core}) (s/conform ::tuple {:triple '[?e ?a ?v]
-                                                                              :triple-order '[:e :a :v]})))
+(comment
+  (graph/get-iterator (memory-graph {:type :core}) (s/conform ::tuple {:triple '[?e ?a ?v]
+                                                                       :triple-order '[:e :a :v]})))
 
 ;; TODO maybe assert :db/id
 (defn- map->triples [m ts]
@@ -134,7 +137,6 @@
     (index-triple-retract graph triple)))
 
 (defn index-triples [graph triples]
-
   (reduce index-triple graph triples))
 
 (defn entity [{:keys [eav] :as graph} eid]

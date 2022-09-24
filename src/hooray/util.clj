@@ -1,5 +1,6 @@
 (ns hooray.util
-  (:require [clojure.edn :as edn]))
+  (:require [clojure.edn :as edn])
+  (:import (java.lang IllegalArgumentException UnsupportedOperationException)))
 
 (defn read-edn [f]
   (-> (slurp f)
@@ -41,3 +42,11 @@
 
 (defn constant? [v]
   (not (or (wildcard? v) (variable? v))))
+
+(defn unsupported-ex
+  ([] (UnsupportedOperationException.))
+  ([msg] (UnsupportedOperationException. msg)))
+
+(defn illegal-ex
+  ([] (IllegalArgumentException.))
+  ([msg] (IllegalArgumentException. msg)))

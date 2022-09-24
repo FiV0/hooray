@@ -7,8 +7,9 @@
   [uri]
   (if (map? uri)
     uri
-    (if-let [[_ db-type db-name] (re-find #"hooray:([^:]+)://(.+)" uri)]
+    (if-let [[_ db-type sub-type db-name] (re-find #"hooray:([^:]+):([^:]*)//(.+)" uri)]
       {:type (keyword db-type)
+       :sub-type (if (str/blank? sub-type) nil (keyword sub-type))
        :name db-name}
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 

@@ -2,17 +2,23 @@
   (:require [clojure.spec.alpha :as s]
             [hooray.datom :as datom :refer [->Datom]]
             [hooray.db :as db]
-            [hooray.db.memory.graph :as graph]
+            [hooray.graph :as graph]
+            [hooray.db.memory.graph :as mem-graph]
+            [hooray.db.memory.graph-index :as g-index]
             [hooray.db.memory.bitemp-graph :as bi-graph]
             [hooray.util :as util])
-  (:import (java.io Closeable)))
-
+  (:import (java.io Closeable)
+           (hooray.db.memory.graph MemoryGraph)
+           (hooray.db.memory.graph_index MemoryGraphIndexed)))
 
 (defrecord MemoryDatabase [graph history timestamp]
   db/Database
   (as-of [this t] (throw (ex-info "todo" {})))
   (as-of-t [this] timestamp)
-  (entity [this eid] (graph/entity graph eid))
+  (entity [this eid]
+    (if (instance? MemoryGraph this)
+      (mem-graph/entity graph eid)
+      (util/unsupported-ex)))
 
   db/GraphDatabase
   (graph [this] graph))
@@ -29,13 +35,17 @@
   (close [_] ;; a no-op for memory databases
     nil))
 
-(defmethod db/connect* :mem [{:keys [name] :as _uri-map}]
-  (let [db (->MemoryDatabase (graph/memory-graph) [] (util/now))]
-    (->MemoryConnection name (atom {:db db}) :mem)))
+(defmethod db/connect* :mem [{:keys [name sub-type] :as uri-map}]
+  (let [db (case sub-type
+             (nil :graph) (->MemoryDatabase (mem-graph/memory-graph) [] (util/now))
+             (:avl :core) (->MemoryDatabase (g-index/memory-graph {:type sub-type}) [] (util/now))
+             (throw (util/illegal-ex (str "No such db sub-type " sub-type))))]
+    (->MemoryConnection name (atom {:db db}) [:mem sub-type])))
 
-(defmethod db/connect* :bi-mem [{:keys [name] :as _uri-map}]
-  (let [db (->MemoryDatabase (bi-graph/memory-bitemp-graph)[] (util/now))]
-    (->MemoryConnection name (atom {:db db}) :bi-mem)))
+
+(defmethod db/connect* :bi-mem [{:keys [name] :as uri-map}]
+  (let [db (->MemoryDatabase (bi-graph/memory-bitemp-graph) [] (util/now))]
+    (->MemoryConnection name (atom {:db db}) [:bi-mem])))
 
 (s/def :hooray/map-transaction map?)
 (s/def :hooray/add-transaction #(and (= :db/add (first %)) (vector? %) (= 4 (count %))))
@@ -62,7 +72,7 @@
     (= :db/retract (first transaction)) [(apply ->Datom (concat (rest transaction) [ts false]))]))
 
 (defn transact* [{:keys [state type] :as _connection} tx-data]
-  (case type
+  (case (first type)
     :mem (s/assert :hooray/tx-data tx-data)
     :bi-mem nil
     (throw (ex-info "No such connection type!" {:type type})))
@@ -81,7 +91,8 @@
 
 (comment
   (def conn (db/connect "hooray:mem://data"))
-  (db/db conn)
+  (def conn (db/connect "hooray:mem:core//data"))
+  (def conn (db/connect "hooray:mem:avl//data"))
 
   (def data [{:db/id "foo"
               :foo/bar "x"}

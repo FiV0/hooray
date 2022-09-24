@@ -2,5 +2,4 @@
          (cider-preferred-build-tool           . clojure-cli)
          (cider-redirect-server-output-to-repl . t)
          (cider-repl-display-help-banner       . nil)
-         (cider-repl-init-code                 . ("(go)"))
          (clojure-toplevel-inside-comment-form . t))))
