@@ -26,7 +26,4 @@
   (repl/refresh)
   (repl/clear)
 
-  (watch-deps!)
-
-  (log/info :foo "foo")
-  )
+  (watch-deps!))

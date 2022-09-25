@@ -22,7 +22,7 @@
     (concat lrow rrow)))
 
 (defn join [{:keys [query var->bindings] :as _compiled-q} db]
-  (if-let [where (:where  query)]
+  (if-let [where (:where query)]
     (if (seq where)
       (let [graph (db/graph db)
             first-results (g/resolve-triple graph (first where))

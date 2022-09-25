@@ -28,6 +28,8 @@
 ;; TODO
 ;; add avl version
 ;; add transients during construction
+;; Think about how to deal with duplicate vars in the iterators. The problem seems to be that
+;; the triejoin algo then needs to take care of different levels for the same TrieIterator.
 
 (defn hash [v] (clojure.core/hash v))
 
