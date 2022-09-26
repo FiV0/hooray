@@ -487,3 +487,12 @@
     :core (->leap-iterator-core (get-index graph tuple) (count triple))
     :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
     (throw (ex-info "todo" {}))))
+
+(defn set-iterator-level [itr l]
+  {:pre [(and (<= 0 l) (< l (depth itr)))]}
+  (cond (< l (level itr)) (set-iterator-level (open itr) l)
+        (> l (level itr)) (set-iterator-level (up itr) l)
+        :else itr))
+
+(defn reset-iterator [itr]
+  (set-iterator-level itr 0))
