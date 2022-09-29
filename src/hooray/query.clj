@@ -305,7 +305,8 @@
 (defn var-join-order2 [{:keys [where]} db]
   (->> (mapcat identity where)
        (filter logic-var?)
-       dedupe))
+       dedupe
+       vec))
 
 (defn query-plan2 [q db]
   (let [var-join-order (var-join-order2 q db)]

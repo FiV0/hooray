@@ -103,6 +103,12 @@
 (defn <-hash-triple [{:keys [doc-store] :as _graph} triple]
   (mapv #(get doc-store %) (take 3 triple)))
 
+(defn value->hash [{:keys [_doc-store] :as _graph} value]
+  (hash value))
+
+(defn hash->value [{:keys [doc-store] :as _graph} h]
+  (get doc-store h))
+
 (defn index-triple-add [{opts :opts :as graph} [e a v :as triple]]
   (let [type (:type opts)
         update-in (if (= type :core) update-in avl-util/update-in)
