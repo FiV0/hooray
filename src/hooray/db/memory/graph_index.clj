@@ -486,6 +486,9 @@
 
 (def ^:private iterator-types #{:simple :core :avl})
 
+(s/fdef get-iterator*
+  :args (s/cat :tuple ::tuple))
+
 (defn get-iterator* [graph {:keys [triple] :as tuple} type]
   {:pre [(s/assert ::tuple tuple) (iterator-types type)]}
   (case type
