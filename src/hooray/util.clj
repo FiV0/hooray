@@ -1,5 +1,6 @@
 (ns hooray.util
-  (:require [clojure.edn :as edn])
+  (:require [clojure.edn :as edn]
+            [hooray.constants :as constants])
   (:import (java.lang IllegalArgumentException UnsupportedOperationException)))
 
 (defn read-edn [f]
@@ -50,3 +51,35 @@
 (defn illegal-ex
   ([] (IllegalArgumentException.))
   ([msg] (IllegalArgumentException. msg)))
+
+(defn print-time
+  "Prints the given timestamp in human readable format."
+  [time-ms]
+  (cond
+    (>= time-ms constants/year)
+    (do (print (quot time-ms constants/year) "years ")
+        (print-time (mod time-ms constants/year)))
+
+    (>= time-ms constants/day)
+    (do (print (quot time-ms constants/day) "days ")
+        (print-time (mod time-ms constants/day)))
+
+    (>= time-ms constants/hour)
+    (do (print (quot time-ms constants/hour) "hours ")
+        (print-time (mod time-ms constants/hour)))
+
+
+    (>= time-ms constants/minute)
+    (do (print (quot time-ms constants/minute) "minutes ")
+        (print-time (mod time-ms constants/minute)))
+
+    (>= time-ms constants/sec)
+    (do (print (quot time-ms constants/sec) "seconds ")
+        (print-time (mod time-ms constants/sec)))
+
+    :else
+    (println time-ms "milliseconds")))
+
+(comment
+  (with-out-str
+    (print-time (System/currentTimeMillis))))
