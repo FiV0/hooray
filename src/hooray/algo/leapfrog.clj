@@ -1,8 +1,10 @@
 (ns hooray.algo.leapfrog
-  (:require [hooray.util :as util]
+  (:require [clojure.spec.alpha :as s]
             [hooray.db :as db]
-            [hooray.graph :as graph]
             [hooray.db.memory.graph-index :as g-index]
+            [hooray.graph :as graph]
+            [hooray.query.spec :as h-spec]
+            [hooray.util :as util]
             [medley.core :refer [map-kv]]))
 
 ;; leapfrog triejoin
@@ -15,9 +17,6 @@
 ;; TODO
 ;; Multiple variable appearance in triples
 
-(require '[clojure.spec.alpha :as s]
-         '[hooray.query.spec :as h-spec])
-
 (comment
   (def q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
@@ -28,9 +27,6 @@
            })
 
   (def q-conformed (s/conform ::h-spec/query q)))
-
-(defn- filter-triples [where]
-  (filter (comp #{:triple} first) where))
 
 (defn- logic-var? [[type _value]]
   (= :logic-var type))
@@ -71,12 +67,13 @@
 
 (defn triple->tuple
   ([triple] {:triple triple :triple-order [:e :a :v]})
-  ([{:keys [e a v] :as _triple} var->join-index]
+  ([{:keys [e a v] :as triple} var->join-index]
    (let [[literals vars] (->> (map vector [e a v] [:e :a :v])
                               ((juxt remove filter) (comp logic-var? first)))
-         vars (sort-by #(-> %1 first second var->join-index) vars)]
-     {:triple (into (vec (map first literals)) (map first vars))
-      :triple-order (into (vec (map second literals)) (map second vars))})))
+         vars (sort-by #(-> %1 first second var->join-index) vars)
+         triple-order (into (vec (map second literals)) (map second vars))]
+     {:triple triple
+      :triple-order triple-order})))
 
 (comment
   (triple->tuple (-> q-conformed :where first second) var->j-index)
@@ -85,7 +82,7 @@
 
 (defn- sort-indices [indices iterators]
   (let [keyfn (zipmap indices (map g-index/key iterators))]
-    (sort-by keyfn indices)))
+    (vec (sort-by keyfn indices))))
 
 (defn- var-indices-sorting [var indices iterators triple-idx+var->level]
   (let [iterators (map #(g-index/set-iterator-level %2 (triple-idx+var->level [var %1])) indices iterators)]
@@ -96,10 +93,17 @@
             [var (var-indices-sorting var indices (map idx->iterators indices) triple-idx+var->level)])
           var->indices))
 
+(s/def ::ids->iterators (s/map-of int? g-index/leap-iterator?))
+(s/def ::var->indices (s/map-of ::h-spec/logic-var (s/and vector? (s/* int?))))
+
 ;; TODO maybe try a stack approach here
+(s/fdef leapfrog-up :args (s/cat :var ::h-spec/logic-var :var->indices ::var->indices :ids->iterators ::ids->iterators))
+
 (defn leapfrog-up [var var->indices ids->iterators]
   (let [indices (get var->indices var)]
     (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)))
+
+(s/fdef leapfrog-down :args (s/cat :var ::h-spec/logic-var :var->indices ::var->indices :ids->iterators ::ids->iterators))
 
 (defn leapfrog-down [var var->indices ids->iterators]
   (let [indices (get var->indices var)]
@@ -109,9 +113,11 @@
   (g-index/key (nth iterators p)))
 
 (defn- iterator-next [iterators p]
+  {:pre [(vector? iterators)]}
   (update iterators p g-index/next))
 
 (defn- iterator-seek [iterators p x]
+  {:pre [(vector? iterators)]}
   (update iterators p #(g-index/seek % x)))
 
 (defn- iterator-end? [iterators p]
@@ -123,7 +129,7 @@
   [var var-pos var->indices idx->iterators]
   (let [indices (get var->indices var)
         k (count indices)
-        iterators (map idx->iterators indices)]
+        iterators (mapv idx->iterators indices)]
     (loop [p var-pos itrs iterators]
       (let [x' (iterator-key itrs (mod (dec p) k))
             x (iterator-key itrs p)]
@@ -142,6 +148,10 @@
 (defn- pop-empty [v]
   (if (seq v) (pop v) nil))
 
+(comment
+  (require 'sc.api)
+  (sc.api/letsc [1 -1]
+                tuples))
 
 ;; lazy-seq ?
 (defn join [{:keys [query var-join-order var->bindings] :as _compiled-q} db]
@@ -149,17 +159,17 @@
   (if-let [where (:where query)]
     (let [max-level (count var-join-order)
           graph (db/graph db)
-          triple-idx+var->level (triple+var->level-map where var->bindings)
+          ;; triple-idx+var->level (triple+var->level-map where var->bindings)
           tuples (->> (filter (comp #{:triple} first) where)
-                      (mapv (comp triple->tuple second)))
+                      (mapv (comp #(triple->tuple % var->bindings) second)))
           idx->iterators (->> (map #(graph/get-iterator graph %) tuples)
                               (zipmap (range)))
           ;; we add a dummy var to bottom out, simplifies the code below
-          dummy-var (gensym "dummy-var")
+          dummy-var (gensym "?dummy-var")
           var-join-order (conj var-join-order dummy-var)
           first-var (first var-join-order)
           var->indices (-> (var->indices-map where)
-                           (update first-var #(var-indices-sorting first-var % (map idx->iterators %) triple-idx+var->level))
+                           (update first-var #(sort-indices % (map idx->iterators %)))
                            #_(initial-indices-sorting triple-idx+var->level idx->trie-iterators)
                            (assoc dummy-var []))
           var->positions (zipmap var-join-order (repeat 0))]
@@ -181,8 +191,13 @@
                 var (nth var-join-order var-level)
                 [val var-pos idx->iterators] (leapfrog-next var (get var->positions var) var->indices idx->iterators)]
             (if val
-              (recur res (conj partial-row val) (inc var-level)
-                     var->indices (assoc var->positions var var-pos) (leapfrog-down var var->indices idx->iterators) )
+              (let [new-var-level (inc var-level)
+                    next-var (nth var-join-order new-var-level)
+                    idx->iterators (leapfrog-down next-var var->indices idx->iterators)]
+                (recur res (conj partial-row val) (inc var-level)
+                       (update var->indices next-var #(sort-indices % (map idx->iterators %)))
+                       (assoc var->positions var var-pos)
+                       idx->iterators))
               (recur res (pop-empty partial-row) (dec var-level)
                      var->indices var->positions (leapfrog-up var var->indices idx->iterators)))))))
     (throw (ex-info "Query must contain where clause!" {:query query}))))
@@ -208,6 +223,25 @@
   (def compiled-q (-> (query/compile-query2 q (get-db))
                       (assoc :query q-conformed)))
 
+
   (join compiled-q (get-db))
+
+
+  (require 'sc.api)
+  (def tupels (sc.api/letsc [5 -3]
+                            tuples))
+
+  (defn get-iterator [tuple]
+    (graph/get-iterator (db/graph (get-db)) tuple))
+
+  (get-iterator (first tupels) )
+  (get-iterator (second tupels) )
+  (get-iterator (nth tupels 2) )
+  (get-iterator (nth tupels 3) )
+
+
+
+
+
 
   )

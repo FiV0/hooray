@@ -60,6 +60,11 @@
   (get-iterator [this tuple] (get-iterator* this tuple :simple))
   (get-iterator [this tuple type] (get-iterator* this tuple type)))
 
+(comment
+  (defmethod print-method MemoryGraphIndexed [_g ^java.io.Writer w]
+    (.write w "MemoryGraphIndexed{}"))
+  )
+
 (defn sorted-set* [type]
   (case type
     :core (sorted-set)
@@ -352,6 +357,9 @@
   (level [this])
   (depth [this]))
 
+(defn leap-iterator? [itr]
+  (and (satisfies? LeapIterator itr) (satisfies? LeapLevels itr)))
+
 (defn pop-empty [v]
   (if (seq v) (pop v) nil))
 
@@ -485,13 +493,27 @@
 
 (def ^:private iterator-types #{:simple :core :avl})
 
-(s/fdef get-iterator*
-  :args (s/cat :graph any? :tuple ::tuple :type iterator-types))
+#_(s/fdef get-iterator*
+    :args (s/cat :graph any? :tuple ::tuple :type iterator-types))
+;; (require '[clojure.spec.test.alpha :as st])
+;; (st/unstrument '(get-iterator*))
 
-(defn get-iterator* [graph {:keys [triple] :as tuple} type]
+(defn- unconform-tuple [{:keys [triple triple-order]}]
+  {:triple (map #(let [[type v] (get triple %)]
+                   (if (= type :logic-var) v (hash v)))
+                triple-order)
+   :triple-order triple-order})
+
+(comment
+  (unconform-tuple '{:triple
+                     {:e [:logic-var ?t],
+                      :a [:literal :track/name],
+                      :v [:literal "For Those About To Rock (We Salute You)"]},
+                     :triple-order [:a :v :e]}))
+
+(defn get-iterator* [graph {:keys [triple triple-order] :as tuple} type]
   #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (let [tuple (-> (s/unform ::tuple tuple)
-                  (update :triple (fn [triple] (map #(if (util/variable? %) % (hash %)) triple))))]
+  (let [tuple (unconform-tuple tuple)]
     (case type
       :simple (->simple-iterator (get-from-index graph tuple))
       :core (->leap-iterator-core (get-index graph tuple) (count triple))
