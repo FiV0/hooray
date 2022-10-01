@@ -195,8 +195,7 @@
   [graph {[t1 t2 t3] :triple-order [_ v2 _] :triple :as _tuple}]
   (let [index (get graph (keyword (str (name t2) (name t1) (name t3))))]
     (for [v1 (keys (index v2)) v3 (get-in index [v2 v1])]
-      (do (println v1 v3)
-          [v1 v3]))))
+      [v1 v3])))
 
 (defmethod get-from-index '[:v ? ?]
   [graph {[t1 t2 t3] :triple-order [v1 _ _] :triple :as _tuple}]
