@@ -19,21 +19,20 @@
   (t/use-fixtures :once fix/with-chinook-index-graph)
   (reset-meta! *ns* {}))
 
-(def tuple-3-vars {:triple '[?e ?a ?v]
-                   :triple-order '[:e :a :v]}
-  #_(s/conform ::mem-gi/tuple {:triple '[?e ?a ?v]
-                               :triple-order '[:e :a :v]}))
+(def tuple-3-vars #_{:triple '[?e ?a ?v]
+                     :triple-order '[:e :a :v]}
+  (s/conform ::mem-gi/tuple {:triple '[?e ?a ?v]
+                             :triple-order '[:e :a :v]}))
 
-(def tuple-2-vars {:triple '[?a ?v]
-                   :triple-order '[:a :v]}
-  #_(s/conform ::mem-gi/tuple {:triple '[?a ?v]
-                               :triple-order '[:a :v]}))
+(def tuple-2-vars #_{:triple '[?a ?v]
+                     :triple-order '[:a :v]}
+  (s/conform ::mem-gi/tuple {:triple '[?a ?v]
+                             :triple-order '[:a :v]}))
 
-(def tuple-1-vars {:triple '[?a]
-                   :triple-order '[:a]}
-  #_(s/conform ::mem-gi/tuple {:triple '[?a]
-                               :triple-order '[:a]}))
-
+(def tuple-1-vars #_{:triple '[?a]
+                     :triple-order '[:a]}
+  (s/conform ::mem-gi/tuple {:triple '[?a]
+                             :triple-order '[:a]}))
 
 (comment
   (alter-var-root #'mem-gi/hash (constantly identity))
@@ -276,3 +275,54 @@
 
 (comment
   (time (t/run-test-var #'seek-test-avl-iterator)))
+
+(deftest get-iterator-literal-simple-test
+  (testing "correctness of iterator implementations"
+    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
+          tgraph (test-graph tdata)
+          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
+                                                               :triple-order '[:e :a :v]}))
+          it-index->data (loop [res {} it it]
+                           (if (mem-gi/at-end? it)
+                             res
+                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                                    (move-to-next it))))]
+      #_(is (instance? SimpleIterator it))
+      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
+
+(comment
+  (t/run-test-var #'get-iterator-literal-simple-test))
+
+(deftest get-iterator-literal-core-test
+  (testing "correctness of iterator implementations"
+    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
+          tgraph (test-graph tdata :core)
+          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
+                                                               :triple-order '[:e :a :v]}))
+          it-index->data (loop [res {} it it]
+                           (if (mem-gi/at-end? it)
+                             res
+                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                                    (move-to-next it))))]
+      #_(is (instance? SimpleIterator it))
+      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
+
+(comment
+  (t/run-test-var #'get-iterator-literal-core-test))
+
+(deftest get-iterator-literal-avl-test
+  (testing "correctness of iterator implementations"
+    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
+          tgraph (test-graph tdata :core)
+          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
+                                                               :triple-order '[:e :a :v]}))
+          it-index->data (loop [res {} it it]
+                           (if (mem-gi/at-end? it)
+                             res
+                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                                    (move-to-next it))))]
+      #_(is (instance? SimpleIterator it))
+      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
+
+(comment
+  (t/run-test-var #'get-iterator-literal-avl-test))

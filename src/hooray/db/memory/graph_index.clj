@@ -487,15 +487,17 @@
 (def ^:private iterator-types #{:simple :core :avl})
 
 (s/fdef get-iterator*
-  :args (s/cat :tuple ::tuple))
+  :args (s/cat :graph any? :tuple ::tuple :type iterator-types))
 
 (defn get-iterator* [graph {:keys [triple] :as tuple} type]
-  {:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (case type
-    :simple (->simple-iterator (get-from-index graph tuple))
-    :core (->leap-iterator-core (get-index graph tuple) (count triple))
-    :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
-    (throw (ex-info "todo" {}))))
+  #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
+  (let [tuple (-> (s/unform ::tuple tuple)
+                  (update :triple (fn [triple] (map #(if (util/variable? %) % (hash %)) triple))))]
+    (case type
+      :simple (->simple-iterator (get-from-index graph tuple))
+      :core (->leap-iterator-core (get-index graph tuple) (count triple))
+      :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
+      (throw (ex-info "todo" {})))))
 
 (defn set-iterator-level [itr l]
   {:pre [(and (<= 0 l) (< l (depth itr)))]}
