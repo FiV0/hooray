@@ -23,6 +23,12 @@
   db/GraphDatabase
   (graph [this] graph))
 
+(defmethod print-method MemoryDatabase [{:keys [graph timestamp] :as db} ^java.io.Writer w]
+  (.write w "#MemoryDatabase{")
+  (.write w (str "graph=" (type graph) ","))
+  (.write w (str "timestamp=" timestamp))
+  (.write w "}"))
+
 (declare transact*)
 
 (defrecord MemoryConnection [name state type]
