@@ -60,10 +60,8 @@
   (get-iterator [this tuple] (get-iterator* this tuple :simple))
   (get-iterator [this tuple type] (get-iterator* this tuple type)))
 
-(comment
-  (defmethod print-method MemoryGraphIndexed [_g ^java.io.Writer w]
-    (.write w "MemoryGraphIndexed{}"))
-  )
+(defmethod print-method MemoryGraphIndexed [_g ^java.io.Writer w]
+  (.write w "MemoryGraphIndexed{}"))
 
 (defn sorted-set* [type]
   (case type
@@ -398,6 +396,9 @@
 
   (depth [this] max-depth))
 
+(defmethod print-method SimpleIterator [_g ^java.io.Writer w]
+  (.write w "#SimpleIterator{}"))
+
 (defn ->simple-iterator [data]
   (->SimpleIterator data [] 0 (count (first data)) false))
 
@@ -455,6 +456,9 @@
 
   (depth [this] max-depth))
 
+(defmethod print-method LeapIteratorCore [_g ^java.io.Writer w]
+  (.write w "#LeapIteratorCore{}"))
+
 (defn ->leap-iterator-core [index max-depth]
   (->LeapIteratorCore (vec index) [] 0 max-depth))
 
@@ -482,6 +486,9 @@
   (level [this] depth)
 
   (depth [this] max-depth))
+
+(defmethod print-method LeapIteratorAVL [_g ^java.io.Writer w]
+  (.write w "#LeapIteratorAvl{}"))
 
 (defn- avl-index? [index]
   (or (instance? clojure.data.avl.AVLMap index)
