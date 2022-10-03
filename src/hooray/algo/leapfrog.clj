@@ -141,6 +141,35 @@
               (recur (mod (inc p) k) itrs))))))))
 
 (defn leapfrog-set-next [var var-pos var->indices idx->iterators]
+(defrecord VarStack [above below])
+
+(defn ->var-stack [var-join-order]
+  (->VarStack '() (apply list var-join-order)))
+
+(defn current [var-stack]
+  {:pre [(instance? VarStack var-stack)]}
+  (first (:below var-stack)))
+
+(defn up [{:keys [above below] :as var-stack}]
+  {:pre [(instance? VarStack var-stack)]}
+  (if-let [cur (peek above)]
+    (->VarStack (pop above) (conj below cur))
+    var-stack))
+
+(defn down [{:keys [above below] :as var-stack}]
+  {:pre [(instance? VarStack var-stack)]}
+  (if-let [cur (peek below)]
+    (->VarStack (conj above cur) (pop below))
+    var-stack))
+
+(comment
+  (def vs (->var-stack '(1 2 3)))
+  (current vs)
+  (-> vs up current)
+  (-> vs down current)
+  (-> vs down down up current)
+  (-> vs down down down current)
+  (-> vs down down up up up current))
   (let [indices (get var->indices var)
         k (count indices)
         idx (nth indices var-pos)
