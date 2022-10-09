@@ -1,5 +1,5 @@
 (ns hooray.db.memory.graph-index
-  (:refer-clojure :exclude [hash key next])
+  (:refer-clojure :exclude [hash key next var])
   (:require [clojure.data.avl :as avl]
             [clojure.set]
             [clojure.spec.alpha :as s]
@@ -353,7 +353,8 @@
   (open [this])
   (up [this])
   (level [this])
-  (depth [this]))
+  (depth [this])
+  (var [this]))
 
 (defn leap-iterator? [itr]
   (and (satisfies? LeapIterator itr) (satisfies? LeapLevels itr)))
@@ -361,7 +362,7 @@
 (defn pop-empty [v]
   (if (seq v) (pop v) nil))
 
-(defrecord SimpleIterator [data prefix depth max-depth end?]
+(defrecord SimpleIterator [data prefix depth max-depth end? vars]
   LeapIterator
   (key [this]
     (when-not end?
@@ -369,14 +370,15 @@
 
   (next [this]
     (if (and (not end?) (or (empty? (rest data)) (= prefix (subvec (second data) 0 (count prefix)))))
-      (->SimpleIterator (rest data) prefix depth max-depth false)
-      (->SimpleIterator data prefix depth max-depth true)))
+      (->SimpleIterator (rest data) prefix depth max-depth false vars)
+      (->SimpleIterator data prefix depth max-depth true vars)))
 
   (seek [this k]
     (let [kk (conj prefix k)
           data (drop-while #(<= (compare (subvec % 0 (count kk)) kk) -1) data)]
       (->SimpleIterator data prefix depth max-depth
-                        (or (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1)))))
+                        (or (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1))
+                        vars)))
 
   (at-end? [this]
     #_(or (empty? (rest data)) (<= (compare prefix (subvec (second data) 0 (count prefix))) -1))
@@ -385,25 +387,27 @@
   LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
-    (->SimpleIterator data (conj prefix (nth (first data) depth)) (inc depth) max-depth false))
+    (->SimpleIterator data (conj prefix (nth (first data) depth)) (inc depth) max-depth false vars))
 
   (up [this]
     #_(assert (> depth 0))
     #_(->SimpleIterator data (pop prefix) (dec depth) max-depth)
-    (->SimpleIterator data (pop-empty prefix) (dec depth) max-depth false))
+    (->SimpleIterator data (pop-empty prefix) (dec depth) max-depth false vars))
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  (var [this] (nth vars depth)))
 
 (defmethod print-method SimpleIterator [_g ^java.io.Writer w]
   (.write w "#SimpleIterator{}"))
 
-(defn ->simple-iterator [data]
-  (->SimpleIterator data [] 0 (count (first data)) false))
+(defn ->simple-iterator [data vars]
+  (->SimpleIterator data [] 0 (count (first data)) false vars))
 
-(defn tuple->simple-iterator [graph tuple]
-  (->simple-iterator (get-from-index graph tuple)))
+(defn tuple->simple-iterator [graph {:keys [triple] :as tuple}]
+  (->simple-iterator (get-from-index graph tuple) (filter util/variable? triple)))
 
 (defn- first-key [index depth max-depth]
   (if (= (inc depth) max-depth)
@@ -428,64 +432,68 @@
   (seek-key [1] 13 0 0)
   (seek-key [0 1] 1 0 0))
 
-(defrecord LeapIteratorCore [index stack depth max-depth]
+(defrecord LeapIteratorCore [index stack depth max-depth vars]
   LeapIterator
   (key [this] (first-key index depth max-depth))
 
   (next [this]
     (if-not (at-end? this)
-      (->LeapIteratorCore (subvec index 1) stack depth max-depth)
+      (->LeapIteratorCore (subvec index 1) stack depth max-depth vars)
       this))
 
   (seek [this k]
     (when (seq index)
-      (->LeapIteratorCore (seek-key index k (inc depth) max-depth) stack depth max-depth)))
+      (->LeapIteratorCore (seek-key index k (inc depth) max-depth) stack depth max-depth vars)))
 
   (at-end? [this] (empty? index))
 
   LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
-    (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth))
+    (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth vars))
 
   (up [this]
     ;; (assert (> depth 0))
-    (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth))
+    (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth vars))
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  (var [this] (nth vars depth)))
 
 (defmethod print-method LeapIteratorCore [_g ^java.io.Writer w]
   (.write w "#LeapIteratorCore{}"))
 
-(defn ->leap-iterator-core [index max-depth]
-  (->LeapIteratorCore (vec index) [] 0 max-depth))
+(defn ->leap-iterator-core [index vars]
+  (->LeapIteratorCore (vec index) [] 0 (count vars) vars))
 
-(defrecord LeapIteratorAVL [index stack depth max-depth]
+(defrecord LeapIteratorAVL [index stack depth max-depth vars]
   LeapIterator
   (key [this] (first-key index depth max-depth))
 
-  (next [this] (->LeapIteratorAVL (clojure.core/next index) stack depth max-depth))
+  (next [this] (->LeapIteratorAVL (clojure.core/next index) stack depth max-depth vars))
 
   (seek [this k]
     (when (seq index)
-      (->LeapIteratorAVL (avl/seek index k) stack depth max-depth)))
+      (->LeapIteratorAVL (avl/seek index k) stack depth max-depth vars)))
 
   (at-end? [this] (empty? index))
 
   LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
-    (->LeapIteratorAVL (-> index first second seq) (conj stack index) (inc depth) max-depth))
+    (->LeapIteratorAVL (-> index first second seq) (conj stack index) (inc depth) max-depth vars))
 
   (up [this]
     #_(assert (> depth 0))
-    (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth))
+    (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth vars))
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  (var [this] (nth vars depth)))
 
 (defmethod print-method LeapIteratorAVL [_g ^java.io.Writer w]
   (.write w "#LeapIteratorAvl{}"))
@@ -494,9 +502,9 @@
   (or (instance? clojure.data.avl.AVLMap index)
       (instance? clojure.data.avl.AVLSet index)))
 
-(defn ->leap-iterator-avl [index max-depth]
+(defn ->leap-iterator-avl [index vars]
   {:pre [(avl-index? index)]}
-  (->LeapIteratorAVL (seq index) [] 0 max-depth))
+  (->LeapIteratorAVL (seq index) [] 0 (count vars) vars))
 
 (def ^:private iterator-types #{:simple :core :avl})
 
@@ -520,11 +528,12 @@
 
 (defn get-iterator* [graph {:keys [triple triple-order] :as tuple} type]
   #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (let [tuple (unconform-tuple tuple)]
+  (let [{:keys [triple] :as tuple} (unconform-tuple tuple)
+        vars (filter util/variable? triple)]
     (case type
-      :simple (->simple-iterator (get-from-index graph tuple))
-      :core (->leap-iterator-core (get-index graph tuple) (count triple))
-      :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
+      :simple (->simple-iterator (get-from-index graph tuple) vars)
+      :core (->leap-iterator-core (get-index graph tuple) vars)
+      :avl (->leap-iterator-avl (get-index graph tuple) vars)
       (throw (ex-info "todo" {})))))
 
 (defn set-iterator-level [itr l]
