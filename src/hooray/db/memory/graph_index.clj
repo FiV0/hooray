@@ -114,7 +114,9 @@
 
 (defn index-triple-add [{opts :opts :as graph} [e a v :as triple]]
   (let [type (:type opts)
-        update-in (if (= type :core) update-in avl-util/update-in)
+        update-in (if (= type :core)
+                    (avl-util/create-update-in sorted-map)
+                    (avl-util/create-update-in avl/sorted-map))
         [he ha hv] (->hash-triple triple)]
     (-> graph
         (update-in [:eav he ha] (fnil conj (sorted-set* type)) hv)
