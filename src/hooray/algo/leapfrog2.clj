@@ -94,11 +94,24 @@
 (s/def ::var->bookkeeping (s/map-of ::h-spec/logic-var ::bookkeeping))
 
 ;; TODO maybe try a stack approach here
-(s/fdef leapfrog-up :args (s/cat :var ::h-spec/logic-var :var->bookkeeping ::var->bookkeeping :ids->iterators ::ids->iterators))
+(s/fdef leapfrog-up :args (s/cat :var-level int?
+                                 :var-join-order (s/and vector? (s/* ::h-spec/logic-var))
+                                 :var->bookkeeping ::var->bookkeeping
+                                 :ids->iterators ::ids->iterators))
 
-(defn leapfrog-up [var var->bookkeeping ids->iterators]
-  (let [indices (get-in var->bookkeeping [var :non-top-indices])]
-    (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)))
+(defn leapfrog-up [var-level var-join-order var->bookkeeping ids->iterators]
+  (let [var (nth var-join-order var-level)
+        indices (get-in var->bookkeeping [var :non-top-indices])
+        new-level (dec var-level)
+        ids->iterators (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)]
+    (if (neg? new-level)
+      [var->bookkeeping ids->iterators]
+      (let [new-var (nth var-join-order new-level)
+            indices (get-in var->bookkeeping [new-var :indices])
+            k (count indices)
+            p (get-in var->bookkeeping [new-var :pos])]
+        [(assoc-in var->bookkeeping [new-var :pos] (mod (inc p) k))
+         (update ids->iterators (nth indices p) g-index/next)]))))
 
 (s/fdef leapfrog-down :args (s/cat :var ::h-spec/logic-var :var->bookkeeping ::var->bookkeeping :ids->iterators ::ids->iterators))
 
@@ -140,17 +153,18 @@
             x (iterator-key itrs p)]
         (cond
           (or (nil? x) (nil? x))
-          [nil nil (->> itrs (zipmap indices) (into idx->iterators))]
+          [nil var-bookkeeping (->> itrs (zipmap indices) (into idx->iterators))]
 
+          ;; the increment to next happens in the `leapfrog-up` call
           (= x' x)
           [x
-           (assoc-in var-bookkeeping [var :pos] (inc p))
-           (->> (iterator-next itrs p) (zipmap indices) (into idx->iterators))]
+           (assoc-in var-bookkeeping [var :pos] p)
+           (->> itrs (zipmap indices) (into idx->iterators))]
 
           :else
           (let [itrs (iterator-seek itrs p x')]
             (if (iterator-end? itrs p)
-              [nil nil (->> itrs (zipmap indices) (into idx->iterators))]
+              [nil var-bookkeeping (->> itrs (zipmap indices) (into idx->iterators))]
               (recur (mod (inc p) k) itrs))))))))
 
 (defn- lookup-row [graph row]
@@ -192,25 +206,33 @@
 
           ;; bottomed out
           (= var-level max-level)
-          (recur (cons partial-row res) (pop-empty partial-row) (dec var-level)
-                 var-bookkeeping idx->iterators)
+          (let [_ (println [var-bookkeeping idx->iterators])
+                [var-bookkeeping idx->iterators]
+                (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
+            (recur (cons partial-row res) (pop-empty partial-row) (dec var-level)
+                   var-bookkeeping idx->iterators))
 
           :else
           (let [var (nth var-join-order var-level)
                 [val var-bookkeeping idx->iterators]
                 (leapfrog-next var var-bookkeeping idx->iterators)]
-            (println [var var-bookkeeping idx->iterators])
+            ;; (println [var var-bookkeeping idx->iterators])
             (if val
               (let [var (nth var-join-order (inc var-level))
                     [var-bookkeeping idx->iterators] (leapfrog-down var var-bookkeeping idx->iterators)]
                 (recur res (conj partial-row val) (inc var-level)
                        var-bookkeeping idx->iterators))
-              (recur res (pop-empty partial-row) (dec var-level)
-                     var-bookkeeping (leapfrog-up var var-bookkeeping idx->iterators)))))))
+              (let [[var-bookkeeping idx->iterators]
+                    (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
+                (recur res (pop-empty partial-row) (dec var-level)
+                       var-bookkeeping idx->iterators)))))))
     (throw (ex-info "Query must contain where clause!" {:query query}))))
 
 
 (comment
+  (require '[clojure.spec.test.alpha :as st])
+  (st/instrument)
+
   (require '[clojure.edn :as edn]
            '[hooray.query :as query])
   (def data (doall (edn/read-string (slurp "resources/transactions.edn"))))
@@ -228,9 +250,10 @@
            ;; :keys [name album]
            })
 
+
   (do
-    (def q '{:find [?first ?last]
-             :where [[?first 5 ?last]]})
+    #_(def q '{:find [?first ?last]
+               :where [[?first 5 ?last]]})
 
     (def q-conformed (s/conform ::h-spec/query q))
     (def compiled-q (-> (query/compile-query2 q (get-db))
