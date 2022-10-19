@@ -47,7 +47,6 @@
 
 
 (comment
-  (require '[clojure.spec.alpha :as s])
 
   (s/def ::tuple (s/and vector?
                         (s/cat :first identity :second identity)))

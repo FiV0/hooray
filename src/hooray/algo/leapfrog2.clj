@@ -4,7 +4,6 @@
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
-            [hooray.util :as util]
             [medley.core :refer [map-kv]]))
 
 (comment
@@ -180,14 +179,18 @@
 ;; }
 
 ;; lazy-seq ?
-(defn join [{:keys [query var-join-order var->bindings] :as _compiled-q} db]
+;; TODO either move this to an imperative implementation (JAVA ?)
+;; or clean this up quite a bit
+
+(defn join [{:keys [conformed-query var-join-order var->bindings] :as _compiled-q} db]
   {:pre [(vector? var-join-order)]}
-  (if-let [where (:where query)]
+  (if-let [where (:where conformed-query)]
     (let [max-level (count var-join-order)
           graph (db/graph db)
+          graph-type (-> graph :opts :type)
           tuples (->> (filter (comp #{:triple} first) where)
                       (mapv (comp #(triple->tuple % var->bindings) second)))
-          idx->iterators (->> (map #(graph/get-iterator graph %) tuples)
+          idx->iterators (->> (map #(graph/get-iterator graph % graph-type) tuples)
                               (zipmap (range max-level)))
           ;; we add a dummy var to bottom out, simplifies the code below
           dummy-var (gensym "?dummy-var")
@@ -206,8 +209,7 @@
 
           ;; bottomed out
           (= var-level max-level)
-          (let [_ (println [var-bookkeeping idx->iterators])
-                [var-bookkeeping idx->iterators]
+          (let [[var-bookkeeping idx->iterators]
                 (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
             (recur (cons partial-row res) (pop-empty partial-row) (dec var-level)
                    var-bookkeeping idx->iterators))
@@ -226,7 +228,7 @@
                     (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
                 (recur res (pop-empty partial-row) (dec var-level)
                        var-bookkeeping idx->iterators)))))))
-    (throw (ex-info "Query must contain where clause!" {:query query}))))
+    (throw (ex-info "Query must contain where clause!" {:query conformed-query}))))
 
 
 (comment
@@ -235,12 +237,16 @@
 
   (require '[clojure.edn :as edn]
            '[hooray.query :as query])
-  (def data (doall (edn/read-string (slurp "resources/transactions.edn"))))
 
-  (def conn (db/connect "hooray:mem:avl//data"))
-  (db/transact conn data)
-  (db/transact conn [[:db/add 1 2 3] [:db/add 4 5 6]])
-  (defn get-db [] (db/db conn))
+  (do
+    (def data (doall (edn/read-string (slurp "resources/transactions.edn"))))
+    (def conn (db/connect "hooray:mem:core//data"))
+    (def conn-avl (db/connect "hooray:mem:avl//data"))
+    (db/transact conn data)
+    (db/transact conn-avl data)
+    (db/transact conn [[:db/add 1 2 3] [:db/add 4 5 6]])
+    (defn get-db [] (db/db conn))
+    (defn get-avl-db [] (db/db conn-avl)))
 
   (def q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
@@ -250,18 +256,27 @@
            ;; :keys [name album]
            })
 
+  (def q '{:find [?name]
+           :where [[?foo :genre/name ?name]]})
+
+  (def q '{:find [?name]
+           :where [[?genre :genre/name "Rock"]
+                   [?track :track/genre ?genre]
+                   #_[?track :track/name ?name]]})
+
+  (def q '{:find [?name]
+           :where
+           [[?genre :genre/name "Rock"]
+            [?t :track/genre ?genre]
+            [?t :track/name ?name]]})
 
   (do
-    #_(def q '{:find [?first ?last]
-               :where [[?first 5 ?last]]})
+    (def compiled-q  (query/compile-query2 q (get-db)))
 
-    (def q-conformed (s/conform ::h-spec/query q))
-    (def compiled-q (-> (query/compile-query2 q (get-db))
-                        (assoc :query q-conformed)))
+    (join compiled-q (get-avl-db)))
 
-    )
-
-  (join compiled-q (get-db))
+  (time (join compiled-q (get-db)))
+  (time (join compiled-q (get-avl-db)))
 
   (def tupels
     (->> (-> compiled-q :query :where)
