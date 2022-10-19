@@ -152,7 +152,7 @@
       (let [x' (iterator-key itrs (mod (dec p) k))
             x (iterator-key itrs p)]
         (cond
-          (or (nil? x) (nil? x))
+          (or (nil? x) (nil? x'))
           [nil var-bookkeeping (->> itrs (zipmap indices) (into idx->iterators))]
 
           ;; the increment to next happens in the `leapfrog-up` call
