@@ -4,18 +4,7 @@
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
-            [hooray.util :as util]
             [medley.core :refer [map-kv]]))
-
-;; leapfrog triejoin
-
-;; what do I need ?
-;; var -> indices of clause
-;; clause + var -> level
-;; construction of triples for iterators
-
-;; TODO
-;; Multiple variable appearance in triples
 
 (comment
   (def q '{:find [?name ?album]
@@ -33,7 +22,7 @@
 
 (defn- ->value [[_ value]] value)
 
-(defn- var->indices-map [where]
+(defn- var->indices [where]
   (->> (map-indexed #(vector %1 (second %2)) where)
        (reduce (fn [res [i {:keys [e a v]}]]
                  (cond-> res
@@ -42,7 +31,7 @@
                    (logic-var? v) (update (->value v) (fnil conj []) i))) {})))
 
 (comment
-  (var->indices-map (:where q-conformed)))
+  (var->indices (:where q-conformed)))
 
 (defn- triple->vars [{:keys [e a v]}]
   (reduce #(if (logic-var? %2) (conj %1 (second %2)) %1) [] [e a v]))
@@ -61,9 +50,21 @@
   (zipmap var-join-order (range)))
 
 (comment
-  (def vars (keys (var->indices-map (:where q-conformed))))
+  (def vars (keys (var->indices(:where q-conformed))))
   (def var->j-index (var->join-index vars))
   (triple+var->level-map (:where q-conformed) var->j-index))
+
+(defn- var->bookkeeping-map [where var->join-index]
+  (let [var->indices (var->indices where)
+        triple+var->level-map (triple+var->level-map where var->join-index)]
+    (map-kv (fn [var indices]
+              [var {:pos 0
+                    :indices indices
+                    :non-top-indices (vec (remove #(= 0 (triple+var->level-map [% var]))indices))}])
+            var->indices)))
+
+(comment
+  (var->bookkeeping-map (:where q-conformed) var->j-index))
 
 (defn triple->tuple
   ([triple] {:triple triple :triple-order [:e :a :v]})
@@ -84,30 +85,43 @@
   (let [keyfn (zipmap indices (map g-index/key iterators))]
     (vec (sort-by keyfn indices))))
 
-(defn- var-indices-sorting [var indices iterators triple-idx+var->level]
-  (let [iterators (map #(g-index/set-iterator-level %2 (triple-idx+var->level [var %1])) indices iterators)]
-    (sort-indices indices iterators)))
-
-(defn- initial-indices-sorting [var->indices triple-idx+var->level idx->iterators]
-  (map-kv (fn [var indices]
-            [var (var-indices-sorting var indices (map idx->iterators indices) triple-idx+var->level)])
-          var->indices))
-
 (s/def ::ids->iterators (s/map-of int? g-index/leap-iterator?))
-(s/def ::var->indices (s/map-of ::h-spec/logic-var (s/and vector? (s/* int?))))
+(s/def ::pos int?)
+(s/def ::indices (s/and vector? (s/* int?)))
+(s/def ::non-top-indices (s/and vector? (s/* int?)))
+(s/def ::bookkeeping (s/keys :req-un [::pos ::indices ::non-top-indices]))
+(s/def ::var->bookkeeping (s/map-of ::h-spec/logic-var ::bookkeeping))
 
 ;; TODO maybe try a stack approach here
-(s/fdef leapfrog-up :args (s/cat :var ::h-spec/logic-var :var->indices ::var->indices :ids->iterators ::ids->iterators))
+(s/fdef leapfrog-up :args (s/cat :var-level int?
+                                 :var-join-order (s/and vector? (s/* ::h-spec/logic-var))
+                                 :var->bookkeeping ::var->bookkeeping
+                                 :ids->iterators ::ids->iterators))
 
-(defn leapfrog-up [var var->indices ids->iterators]
-  (let [indices (get var->indices var)]
-    (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)))
+(defn leapfrog-up [var-level var-join-order var->bookkeeping ids->iterators]
+  (let [var (nth var-join-order var-level)
+        indices (get-in var->bookkeeping [var :non-top-indices])
+        new-level (dec var-level)
+        ids->iterators (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)]
+    (if (neg? new-level)
+      [var->bookkeeping ids->iterators]
+      (let [new-var (nth var-join-order new-level)
+            indices (get-in var->bookkeeping [new-var :indices])
+            k (count indices)
+            p (get-in var->bookkeeping [new-var :pos])]
+        [(assoc-in var->bookkeeping [new-var :pos] (mod (inc p) k))
+         (update ids->iterators (nth indices p) g-index/next)]))))
 
-(s/fdef leapfrog-down :args (s/cat :var ::h-spec/logic-var :var->indices ::var->indices :ids->iterators ::ids->iterators))
+(s/fdef leapfrog-down :args (s/cat :var ::h-spec/logic-var :var->bookkeeping ::var->bookkeeping :ids->iterators ::ids->iterators))
 
-(defn leapfrog-down [var var->indices ids->iterators]
-  (let [indices (get var->indices var)]
-    (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/open %))) ids->iterators indices)))
+(defn leapfrog-down [var var->bookkeeping ids->iterators]
+  (let [indices (get-in var->bookkeeping [var :indices])
+        non-top-indices (get-in var->bookkeeping [var :non-top-indices])
+        ids->iterators (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/open %))) ids->iterators non-top-indices)]
+    [(-> var->bookkeeping
+         (assoc-in [var :pos] 0)
+         (assoc-in [var :indices] (sort-indices indices (map ids->iterators indices))))
+     ids->iterators]))
 
 (defn- iterator-key [iterators p]
   (g-index/key (nth iterators p)))
@@ -123,58 +137,34 @@
 (defn- iterator-end? [iterators p]
   (g-index/at-end? (nth iterators p)))
 
+(s/fdef leapfrog-next :args (s/cat :var ::h-spec/logic-var :var->bookkeeping ::var->bookkeeping :ids->iterators ::ids->iterators))
+
 (defn leapfrog-next
   "Returns a tuple of next-value, next-iterator-pos and updated idx->iterators.
   next-value will be nil if no value could be found."
-  [var var-pos var->indices idx->iterators]
-  (let [indices (get var->indices var)
+  [var var-bookkeeping idx->iterators]
+  (let [var-pos (get-in var-bookkeeping [var :pos])
+        indices (get-in var-bookkeeping [var :indices])
         k (count indices)
         iterators (mapv idx->iterators indices)]
     (loop [p var-pos itrs iterators]
       (let [x' (iterator-key itrs (mod (dec p) k))
             x (iterator-key itrs p)]
-        (if (= x' x)
-          [x p (->> itrs (zipmap indices) (into idx->iterators))]
+        (cond
+          (or (nil? x) (nil? x'))
+          [nil var-bookkeeping (->> itrs (zipmap indices) (into idx->iterators))]
+
+          ;; the increment to next happens in the `leapfrog-up` call
+          (= x' x)
+          [x
+           (assoc-in var-bookkeeping [var :pos] p)
+           (->> itrs (zipmap indices) (into idx->iterators))]
+
+          :else
           (let [itrs (iterator-seek itrs p x')]
             (if (iterator-end? itrs p)
-              [nil nil (->> itrs (zipmap indices) (into idx->iterators))]
+              [nil var-bookkeeping (->> itrs (zipmap indices) (into idx->iterators))]
               (recur (mod (inc p) k) itrs))))))))
-
-(defn leapfrog-set-next [var var-pos var->indices idx->iterators]
-(defrecord VarStack [above below])
-
-(defn ->var-stack [var-join-order]
-  (->VarStack '() (apply list var-join-order)))
-
-(defn current [var-stack]
-  {:pre [(instance? VarStack var-stack)]}
-  (first (:below var-stack)))
-
-(defn up [{:keys [above below] :as var-stack}]
-  {:pre [(instance? VarStack var-stack)]}
-  (if-let [cur (peek above)]
-    (->VarStack (pop above) (conj below cur))
-    var-stack))
-
-(defn down [{:keys [above below] :as var-stack}]
-  {:pre [(instance? VarStack var-stack)]}
-  (if-let [cur (peek below)]
-    (->VarStack (conj above cur) (pop below))
-    var-stack))
-
-(comment
-  (def vs (->var-stack '(1 2 3)))
-  (current vs)
-  (-> vs up current)
-  (-> vs down current)
-  (-> vs down down up current)
-  (-> vs down down down current)
-  (-> vs down down up up up current))
-  (let [indices (get var->indices var)
-        k (count indices)
-        idx (nth indices var-pos)
-        iterator (get idx->iterators idx)]
-    [(mod (inc var-pos) k) (assoc idx->iterators idx (g-index/next iterator))]))
 
 (defn- lookup-row [graph row]
   (mapv #(g-index/hash->value graph %) row))
@@ -182,81 +172,81 @@
 (defn- pop-empty [v]
   (if (seq v) (pop v) nil))
 
-(comment
-  (require 'sc.api))
+;; var-bookkeeping is a map from var to
+;; {:pos             - the current position of the iterators
+;;  :indices         - all the iterator indices involved for this var
+;;  :non-top-indices - all indices of iterators that are not
+;; }
 
 ;; lazy-seq ?
-(defn join [{:keys [query var-join-order var->bindings] :as _compiled-q} db]
+;; TODO either move this to an imperative implementation (JAVA ?)
+;; or clean this up quite a bit
+
+(defn join [{:keys [conformed-query var-join-order var->bindings] :as _compiled-q} db]
   {:pre [(vector? var-join-order)]}
-  (if-let [where (:where query)]
+  (if-let [where (:where conformed-query)]
     (let [max-level (count var-join-order)
           graph (db/graph db)
-          ;; triple-idx+var->level (triple+var->level-map where var->bindings)
+          graph-type (-> graph :opts :type)
           tuples (->> (filter (comp #{:triple} first) where)
                       (mapv (comp #(triple->tuple % var->bindings) second)))
-          ;; _ (sc.api/spy)
-          idx->iterators (->> (map #(graph/get-iterator graph %) tuples)
+          idx->iterators (->> (map #(graph/get-iterator graph % graph-type) tuples)
                               (zipmap (range max-level)))
           ;; we add a dummy var to bottom out, simplifies the code below
           dummy-var (gensym "?dummy-var")
           var-join-order (conj var-join-order dummy-var)
+          var-join-index (var->join-index var-join-order)
           first-var (first var-join-order)
-          var->indices (-> (var->indices-map where)
-                           (update first-var #(sort-indices % (map idx->iterators %)))
-                           #_(initial-indices-sorting triple-idx+var->level idx->trie-iterators)
-                           (assoc dummy-var []))
-          var->positions (zipmap var-join-order (repeat max-level 0))]
+          var-bookkeeping (-> (var->bookkeeping-map where var-join-index)
+                              (update-in [first-var :indices] #(sort-indices % (map idx->iterators %)))
+                              (assoc dummy-var {:pos 0 :indices [] :non-top-indices []}))]
       (loop [res nil partial-row [] var-level 0
-             var->indices var->indices var->positions var->positions idx->iterators idx->iterators]
-        ;; dummy-level
-        (if (= var-level max-level)
-          (let [new-var-level (dec var-level)]
-            (if-not (neg? new-var-level)
-              (let [next-var (nth var-join-order new-var-level)
-                    [new-pos idx->iterators] (leapfrog-set-next next-var (get var->positions next-var) var->indices idx->iterators)]
-                (recur (cons partial-row res) (pop-empty partial-row) new-var-level
-                       var->indices (assoc var->positions next-var new-pos) idx->iterators)
-                #_(recur res (pop-empty partial-row) new-var-level
-                         var->indices (assoc var->positions next-var new-pos) idx->iterators))
+             var-bookkeeping var-bookkeeping idx->iterators idx->iterators]
+        (cond
 
-              ;; finished
-              (map (partial lookup-row graph) res)))
+          ;; finished
+          (neg? var-level) (map (partial lookup-row graph) res)
 
+          ;; bottomed out
+          (= var-level max-level)
+          (let [[var-bookkeeping idx->iterators]
+                (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
+            (recur (cons partial-row res) (pop-empty partial-row) (dec var-level)
+                   var-bookkeeping idx->iterators))
 
-          ;; move up or down
-          (let [_ (assert (< var-level (count var-join-order)))
-                var (nth var-join-order var-level)
-                [val var-pos idx->iterators] (leapfrog-next var (get var->positions var) var->indices idx->iterators)]
+          :else
+          (let [var (nth var-join-order var-level)
+                [val var-bookkeeping idx->iterators]
+                (leapfrog-next var var-bookkeeping idx->iterators)]
+            ;; (println [var var-bookkeeping idx->iterators])
             (if val
-              (let [new-var-level (inc var-level)
-                    next-var (nth var-join-order new-var-level)
-                    idx->iterators (leapfrog-down next-var var->indices idx->iterators)]
+              (let [var (nth var-join-order (inc var-level))
+                    [var-bookkeeping idx->iterators] (leapfrog-down var var-bookkeeping idx->iterators)]
                 (recur res (conj partial-row val) (inc var-level)
-                       (update var->indices next-var #(sort-indices % (map idx->iterators %)))
-                       (assoc var->positions var var-pos)
-                       idx->iterators))
-              (let [new-var-level (dec var-level)]
-                (if-not (neg? new-var-level)
-                  (let [next-var (nth var-join-order new-var-level)
-                        idx->iterators (leapfrog-up var var->indices idx->iterators)
-                        [new-pos idx->iterators]
-                        (leapfrog-set-next next-var (get var->positions next-var) var->indices idx->iterators)]
-                    (recur res (pop-empty partial-row) new-var-level
-                           var->indices (assoc var->positions next-var new-pos) idx->iterators))
+                       var-bookkeeping idx->iterators))
+              (let [[var-bookkeeping idx->iterators]
+                    (leapfrog-up var-level var-join-order var-bookkeeping idx->iterators)]
+                (recur res (pop-empty partial-row) (dec var-level)
+                       var-bookkeeping idx->iterators)))))))
+    (throw (ex-info "Query must contain where clause!" {:query conformed-query}))))
 
-                  ;; finished
-                  (map (partial lookup-row graph) res))))))))
-    (throw (ex-info "Query must contain where clause!" {:query query}))))
 
 (comment
+  (require '[clojure.spec.test.alpha :as st])
+  (st/instrument)
+
   (require '[clojure.edn :as edn]
            '[hooray.query :as query])
-  (def data (doall (edn/read-string (slurp "resources/transactions.edn"))))
 
-  (def conn (db/connect "hooray:mem:avl//data"))
-  (db/transact conn data)
-  (db/transact conn [[:db/add 1 2 3] [:db/add 4 5 6]])
-  (defn get-db [] (db/db conn))
+  (do
+    (def data (doall (edn/read-string (slurp "resources/transactions.edn"))))
+    (def conn (db/connect "hooray:mem:core//data"))
+    (def conn-avl (db/connect "hooray:mem:avl//data"))
+    (db/transact conn data)
+    (db/transact conn-avl data)
+    (db/transact conn [[:db/add 1 2 3] [:db/add 4 5 6]])
+    (defn get-db [] (db/db conn))
+    (defn get-avl-db [] (db/db conn-avl)))
 
   (def q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
@@ -266,32 +256,43 @@
            ;; :keys [name album]
            })
 
-  (def q '{:find [?first ?last]
-           :where [[?first 5 ?last]]})
+  (def q '{:find [?name]
+           :where [[?foo :genre/name ?name]]})
 
-  (def q-conformed (s/conform ::h-spec/query q))
-  (def compiled-q (-> (query/compile-query2 q (get-db))
-                      (assoc :query q-conformed)))
+  (def q '{:find [?name]
+           :where [[?genre :genre/name "Rock"]
+                   [?track :track/genre ?genre]
+                   #_[?track :track/name ?name]]})
 
+  (def q '{:find [?name]
+           :where
+           [[?genre :genre/name "Rock"]
+            [?t :track/genre ?genre]
+            [?t :track/name ?name]]})
 
-  (join compiled-q (get-db))
+  (do
+    (def compiled-q  (query/compile-query2 q (get-db)))
 
+    (join compiled-q (get-avl-db)))
 
-  (require 'sc.api)
-  (def tupels (sc.api/letsc [5 -3]
-                            tuples))
+  (time (join compiled-q (get-db)))
+  (time (join compiled-q (get-avl-db)))
+
+  (def tupels
+    (->> (-> compiled-q :query :where)
+         (filter (comp #{:triple} first))
+         (mapv (comp #(triple->tuple % (:var->bindings compiled-q)) second))))
 
   (defn get-iterator [tuple]
     (graph/get-iterator (db/graph (get-db)) tuple))
 
-  (get-iterator (first tupels) )
+
+  (def it (get-iterator (first tupels) ))
   (get-iterator (second tupels) )
   (get-iterator (nth tupels 2) )
   (get-iterator (nth tupels 3) )
 
-
-
-
-
-
+  (-> it g-index/key )
+  (-> it g-index/at-end? )
+  (-> it g-index/next g-index/at-end?)
   )

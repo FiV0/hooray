@@ -1,14 +1,12 @@
 (ns hooray.query
-  (:require [clojure.core.rrb-vector :as fv]
-            [clojure.set :as set]
+  (:require [clojure.set :as set]
             [clojure.string :as str]
-            [clojure.spec.alpha :as s]
+            [hooray.algo.binary-join :as bj]
+            [hooray.algo.leapfrog :as lf]
             [hooray.db :as db]
             [hooray.graph :as graph]
-            [hooray.util :as util]
             [hooray.query.spec :as hooray-spec]
-            [hooray.algo.binary-join :as bj]
-            [hooray.algo.leapfrog2 :as lf])
+            [hooray.util :as util])
   (:import (hooray.db.memory.graph MemoryGraph)
            (hooray.db.memory.graph_index MemoryGraphIndexed)))
 
