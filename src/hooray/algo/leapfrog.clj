@@ -6,6 +6,9 @@
             [hooray.query.spec :as h-spec]
             [medley.core :refer [map-kv]]))
 
+;; Leapfrog Triejoin
+;; https://arxiv.org/pdf/1210.0481.pdf
+
 (comment
   (def q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
