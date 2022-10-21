@@ -52,34 +52,38 @@
   ([] (IllegalArgumentException.))
   ([msg] (IllegalArgumentException. msg)))
 
+(defn format-time
+  "Formats the given timestamp in human readable format."
+  ([time-ms] (format-time "" time-ms))
+  ([format-str time-ms]
+   (cond
+     (>= time-ms constants/year)
+     (format-time (str format-str " " (quot time-ms constants/year) "years")
+                  (mod time-ms constants/year))
+
+     (>= time-ms constants/day)
+     (format-time (str format-str " " (quot time-ms constants/day) "days")
+                  (mod time-ms constants/day))
+
+     (>= time-ms constants/hour)
+     (format-time (str format-str " " (quot time-ms constants/hour) "hours")
+                  (mod time-ms constants/hour))
+
+     (>= time-ms constants/minute)
+     (format-time (str format-str " " (quot time-ms constants/minute) "minutes")
+                  (mod time-ms constants/minute))
+
+     (>= time-ms constants/sec)
+     (format-time (str format-str " " (quot time-ms constants/sec) "seconds")
+                  (mod time-ms constants/sec))
+
+     :else
+     (str format-str " " time-ms  "milliseconds"))))
+
 (defn print-time
   "Prints the given timestamp in human readable format."
   [time-ms]
-  (cond
-    (>= time-ms constants/year)
-    (do (print (quot time-ms constants/year) "years ")
-        (print-time (mod time-ms constants/year)))
-
-    (>= time-ms constants/day)
-    (do (print (quot time-ms constants/day) "days ")
-        (print-time (mod time-ms constants/day)))
-
-    (>= time-ms constants/hour)
-    (do (print (quot time-ms constants/hour) "hours ")
-        (print-time (mod time-ms constants/hour)))
-
-
-    (>= time-ms constants/minute)
-    (do (print (quot time-ms constants/minute) "minutes ")
-        (print-time (mod time-ms constants/minute)))
-
-    (>= time-ms constants/sec)
-    (do (print (quot time-ms constants/sec) "seconds ")
-        (print-time (mod time-ms constants/sec)))
-
-    :else
-    (println time-ms "milliseconds")))
+  (println (format-time time-ms)))
 
 (comment
-  (with-out-str
-    (print-time (System/currentTimeMillis))))
+  (print-time (System/currentTimeMillis)))

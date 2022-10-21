@@ -1,10 +1,12 @@
 (ns hooray.fixtures
   (:require [clojure.test :refer [deftest testing is]]
+            [clojure.tools.logging :as log]
             [clojure.edn :as edn]
+            [hooray.core :as hooray]
             [hooray.db :as db]
             [hooray.graph :as g]
-            [hooray.db.memory.graph :as mem-gr]
-            [hooray.db.memory.graph-index :as mem-gi]))
+            [hooray.db.memory.graph-index :as mem-gi]
+            [hooray.util :as util]))
 
 (def ^:dynamic *conn* nil)
 (def ^:dynamic *graph* nil)
@@ -15,10 +17,13 @@
 
 (defn mem-db-str [] (str "hooray:mem://" (unique-db-name)))
 
-(defn with-chinook-db [f]
+(defn with-mem-db [f]
   (binding [*conn* (db/connect (mem-db-str))]
-    (db/transact *conn* test-data)
     (f)))
+
+(defn with-chinook-data [f]
+  (db/transact *conn* test-data)
+  (f))
 
 (def ^:dynamic *graph-type* nil)
 
@@ -32,3 +37,33 @@
     (alter-var-root #'mem-gi/hash (constantly identity))
     (f)
     (alter-var-root #'mem-gi/hash (constantly old))))
+
+(def ^:private db-urls ["hooray:mem://data"
+                        "hooray:mem:core//data"
+                        "hooray:mem:avl//data"])
+
+(defn with-each-db-option* [f]
+  (doseq [db-url db-urls]
+    (binding [*conn* (hooray/connect db-url)]
+      (testing db-url
+        (f)))))
+
+(defmacro with-each-db-option [& body]
+  `(with-each-db-option* (fn [] ~@body)))
+
+(defn with-timing* [f]
+  (let [start-time-ms (System/currentTimeMillis)
+        ret (try
+              (f)
+              (catch Exception e
+                (log/error e "caught exception during")
+                {:error (str e)}))]
+    (merge (when (map? ret) ret)
+           {:time-taken-ms (- (System/currentTimeMillis) start-time-ms)})))
+
+(defmacro with-timing [& body]
+  `(with-timing* (fn [] ~@body)))
+
+(defn with-timing-logged [f]
+  (let [{:keys [time-taken-ms]} (with-timing* f)]
+    (log/infof "Test took %s" (util/format-time time-taken-ms))))
