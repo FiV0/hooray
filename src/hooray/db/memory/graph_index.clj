@@ -520,13 +520,14 @@
                       :v [:literal "For Those About To Rock (We Salute You)"]},
                      :triple-order [:a :v :e]}))
 
-(defn get-iterator* [graph {:keys [triple triple-order] :as tuple} type]
+(defn get-iterator* [graph {:keys [_triple _triple-order] :as tuple} type]
   #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (let [tuple (unconform-tuple tuple)]
+  (let [{:keys [triple] :as tuple} (unconform-tuple tuple)
+        nb-vars (count (filter util/variable? triple))]
     (case type
       :simple (->simple-iterator (get-from-index graph tuple))
-      :core (->leap-iterator-core (get-index graph tuple) (count triple))
-      :avl (->leap-iterator-avl (get-index graph tuple) (count triple))
+      :core (->leap-iterator-core (get-index graph tuple) nb-vars)
+      :avl (->leap-iterator-avl (get-index graph tuple) nb-vars)
       (throw (ex-info "todo" {})))))
 
 (defn set-iterator-level [itr l]

@@ -3,6 +3,7 @@
             [hooray.algo.binary-join :as bj]
             [hooray.algo.leapfrog :as lf]
             [hooray.db :as db]
+            [hooray.db.memory]
             [hooray.db.memory.graph]
             [hooray.db.memory.graph-index]
             [hooray.graph :as graph]
@@ -161,8 +162,7 @@
 
     (defn db [] (db/db conn))
     (defn db-core [] (db/db conn-core))
-    (defn db-avl [] (db/db conn-avl))
-    )
+    (defn db-avl [] (db/db conn-avl)))
 
   (def q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
