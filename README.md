@@ -1,22 +1,11 @@
-# {project}
+# Hooray 🎉
 
-Executing the program can either be done via
-```
-clj -M -m scratch :arg1 :arg2
-```
-or by compiling a jar via
-```
-clj -T:build clean
-clj -T:build jar
-```
-and executing it via
-```
-java -jar target/lib-0.1.4.jar :arg1 :arg2
+This is *very beta*.
 
-```
+### Examples
 
 ### Inspiration
-Some projects I have looked at and
+Some projects I have looked at and drawn some inspiration from
 
 - [asami](https://github.com/quoll/asami) - Graph database written Clojure(script)
 - [xtdb](https://github.com/xtdb/xtdb) - General-purpose bitemporal database for SQL, Datalog & graph queries.
