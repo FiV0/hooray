@@ -44,17 +44,3 @@
 
 (use-method clojure.pprint/simple-dispatch clojure.lang.IRecord pprint-record)
 (prefer-method clojure.pprint/simple-dispatch clojure.lang.IRecord clojure.lang.IPersistentMap)
-
-
-(comment
-
-  (s/def ::tuple (s/and vector?
-                        (s/cat :first identity :second identity)))
-
-  (def tuple (s/conform ::tuple [1 2]))
-
-  (defn foo [t] t)
-
-  (s/fdef foo :args (s/cat :t ::tuple))
-
-  (foo tuple))

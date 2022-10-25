@@ -72,21 +72,6 @@
                                                 :limit 12}))
   (query-plan conformed-q nil))
 
-;; index-fn should follow the convention of [opts, next var bound ....]
-
-(defn ->unary-index-fn [{:keys [e a v]} db]
-  (fn [_]
-    (graph/resolve-triple (db/graph db) [e a v])))
-
-(defn ->binary-index-fn [{:keys [e a v]} db]
-  ;; FIXME
-  )
-
-(defn ->ternary-index-fn [{:keys [e a v]} db]
-  {:pre [(assert (every? logic-var? [e a v]))]}
-  ;; FIXME
-  )
-
 (defn order-by-bindings [v var->bindings]
   (sort-by var->bindings v))
 
@@ -144,15 +129,10 @@
       return-maps? (map (->return-maps q)))))
 
 (comment
-  (require '[clojure.edn :as edn]
-           '[hooray.db :as db]
-           '[hooray.graph :as g])
-
-  (defn wrap-in-adds [tx-data]
-    (map #(vector :db/add %) tx-data))
+  (require '[clojure.edn :as edn])
 
   (do
-    (def conn (db/connect "hooray:mem://data"))
+    (def conn(db/connect "hooray:mem://data"))
     (def conn-core (db/connect "hooray:mem:core//data"))
     (def conn-avl (db/connect "hooray:mem:avl//data"))
     (def data (edn/read-string (slurp "resources/transactions.edn")))
@@ -173,8 +153,4 @@
 
   (query q (db))
   (query q (db-core))
-  (query q (db-avl))
-
-  (g/resolve-triple  (:graph (db)) '[?t :track/name "For Those About To Rock (We Salute You)" ])
-
-  )
+  (query q (db-avl)))

@@ -1,5 +1,6 @@
 (ns hooray.util
   (:require [clojure.edn :as edn]
+            [clojure.tools.logging :as log]
             [hooray.constants :as constants])
   (:import (java.lang IllegalArgumentException UnsupportedOperationException)))
 
@@ -87,3 +88,16 @@
 
 (comment
   (print-time (System/currentTimeMillis)))
+
+(defn with-timing* [f]
+  (let [start-time-ms (System/currentTimeMillis)
+        ret (try
+              (f)
+              (catch Exception e
+                (log/error e "caught exception during")
+                {:error (str e)}))]
+    {:res ret
+     :ms (- (System/currentTimeMillis) start-time-ms)}))
+
+(defmacro with-timing [& body]
+  `(with-timing* (fn [] ~@body)))

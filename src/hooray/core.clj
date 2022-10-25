@@ -2,7 +2,8 @@
   (:require [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.persistent]
-            [hooray.query :as query]))
+            [hooray.query :as query])
+  (:import (hooray.db.memory MemoryConnection)))
 
 (defn connect [uri]
   (db/connect uri))
@@ -14,24 +15,40 @@
   {:pre [(>= (count inputs) 1)]}
   (query/query query (first inputs)))
 
-(comment
-  (require '[clojure.edn :as edn])
+(defn db [conn]
+  {:pre [(instance? MemoryConnection conn)]}
+  (db/db conn))
 
-  (def conn (db/connect "hooray:mem://data"))
+(comment
+  (require '[clojure.edn :as edn]
+           '[hooray.util :as util])
+
   (def data (edn/read-string (slurp "resources/transactions.edn")))
 
-  (def bi-conn (db/connect "hooray:bi-mem://data"))
+  (do
+    (def conn (connect "hooray:mem://data"))
+    (def conn-core (connect "hooray:mem:core//data"))
+    (def conn-avl (connect "hooray:mem:avl//data"))
+    (transact conn data)
+    (transact conn-core data)
+    (transact conn-avl data)
 
-  (-> bi-conn :state deref :db type)
+    (defn db-bin [] (db conn))
+    (defn db-core [] (db conn-core))
+    (defn db-avl [] (db conn-avl)))
 
-  (transact conn data)
+  (for [db-fn [db-bin db-core db-avl]]
+    (util/with-timing
+      (q '{:find [?name ?album]
+           :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+                   [?t :track/album ?album]
+                   [?album :album/artist ?artist]
+                   [?artist :artist/name ?name]]}
+         (db-fn))))
 
   (time (q '{:find [?name ?album]
              :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
                      [?t :track/album ?album]
                      [?album :album/artist ?artist]
                      [?artist :artist/name ?name]]}
-           (db/db conn)))
-
-
-  )
+           (db-bin))))

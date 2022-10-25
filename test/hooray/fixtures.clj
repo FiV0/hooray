@@ -1,5 +1,5 @@
 (ns hooray.fixtures
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [clojure.test :as test :refer [testing]]
             [clojure.tools.logging :as log]
             [clojure.edn :as edn]
             [hooray.core :as hooray]
