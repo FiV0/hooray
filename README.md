@@ -2,7 +2,43 @@
 
 This is *very beta*.
 
+Experiments with Datalog and join algorithms.
+
 ### Examples
+
+```clj
+(require '[hooray.core :as h])
+
+(def conn (h/connect "hooray:mem:avl//data"))
+
+(h/transact conn [{:db/id 0
+                   :hello :world}
+                  [:db/add 1 :foo :bar]])
+
+(h/q '{:find [?e ?a ?v]
+       :where [[?e ?a ?v]]}
+     (h/db conn))
+;; => ([1 :foo :bar] [0 :hello :world])
+```
+
+In case you want to experiment with a bigger dataset, you can bring
+in the [chinnook-db](https://github.com/FiV0/xtdb-chinook).
+
+```clj
+(require '[clojure.edn :as edn])
+
+(def data (edn/read-string (slurp "resources/transactions.edn")))
+(h/transact conn data)
+
+(h/q '{:find [?name ?album-title]
+       :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+               [?t :track/album ?album]
+               [?album :album/title ?album-title]
+               [?album :album/artist ?artist]
+               [?artist :artist/name ?name]]}
+     (h/db conn))
+;; => (["AC/DC" "For Those About To Rock We Salute You"])
+```
 
 ### Inspiration
 Some projects I have looked at and drawn some inspiration from
@@ -15,6 +51,15 @@ Some projects I have looked at and drawn some inspiration from
 * triple - generally refers to an [e a v] triple, sometimes also in a different order
 * pattern - refers to a non yet instantiated triple, could contain variables but does not have to
 * clause - more generally a where clause. Could be a triple but maybe also a different kind of clause.
+
+### Outlook
+Some possible directions and improvements of this repository.
+
+- implement some more join algorithms
+- use B-trees
+- create a test suite to compare different join algorithms
+- persistency
+- views (Differential Dataflow, Materialized views (see [relic](https://github.com/wotbrew/relic))
 
 ## License
 
