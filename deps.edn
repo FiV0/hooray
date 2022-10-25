@@ -17,8 +17,10 @@
   #_{:mvn/version "0.1.2"}
 
   org.clojure/data.avl
+  {:git/url "https://github.com/FiV0/data.avl.git"
+   :git/sha "71d07d4b134a53afe64f2fe5a8e5063c87b14d3e"}
   #_{:mvn/version "0.1.0"}
-  {:local/root "../data.avl/"}
+  #_{:local/root "../data.avl/"}
 
   persistent-sorted-set/persistent-sorted-set
   {:mvn/version "0.1.4"}
