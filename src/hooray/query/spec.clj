@@ -1,8 +1,10 @@
+;; This file initially contained big parts copied from XTDB
+;; Copyright © 2018-2022 JUXT LTD.
+
 (ns hooray.query.spec
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]))
 
-;; big parts copied from xtdb
 (s/def ::logic-var
   (s/and simple-symbol?
          (comp #(str/starts-with? % "?") name)))
