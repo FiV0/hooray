@@ -1,6 +1,5 @@
-(ns hooray.algo.binary-join
-  (:require [clojure.string :as str]
-            [hooray.graph :as g]
+(ns hooray.algo.hash-join
+  (:require [hooray.graph :as g]
             [hooray.db :as db]))
 
 ;; binary join strategy on clauses

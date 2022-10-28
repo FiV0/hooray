@@ -1,6 +1,6 @@
 (ns hooray.query
   (:require [clojure.string :as str]
-            [hooray.algo.binary-join :as bj]
+            [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
             [hooray.db :as db]
             [hooray.db.memory]
@@ -115,7 +115,7 @@
 (defmulti join (fn [_compiled-q db] (type (db/graph db))))
 
 (defmethod join MemoryGraph [compiled-q db]
-  (bj/join compiled-q db))
+  (hj/join compiled-q db))
 
 (defmethod join MemoryGraphIndexed [compiled-q db]
   (lf/join compiled-q db))
