@@ -493,7 +493,8 @@
   (.write w "#LeapIteratorAvl{}"))
 
 (defn- avl-index? [index]
-  (or (instance? clojure.data.avl.AVLMap index)
+  (or (nil? index)
+      (instance? clojure.data.avl.AVLMap index)
       (instance? clojure.data.avl.AVLSet index)))
 
 (defn ->leap-iterator-avl [index max-depth]
