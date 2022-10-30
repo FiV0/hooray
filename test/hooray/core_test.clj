@@ -18,5 +18,17 @@
                              [?artist :artist/name ?name]]}
                    (db/db *conn*))))))
 
+(deftest simple-multi-result-query
+  (testing "Simple multi-result query"
+    (is (= 32
+           (count (core/q '{:find [?track-name ?album-title]
+                            :where [[?artist :artist/name "Ozzy Osbourne"]
+                                    [?album :album/artist ?artist]
+                                    [?album :album/title ?album-title]
+                                    [?t :track/album ?album]
+                                    [?t :track/name ?track-name]]}
+                          (db/db *conn*)))))))
+
+
 (comment
   (t/run-tests))
