@@ -101,9 +101,10 @@
                                  :var->bookkeeping ::var->bookkeeping
                                  :ids->iterators ::ids->iterators))
 
+;; NOTE: We use all indices (not just the not-top-indices) when going up. The iterators get reset in that case.
 (defn leapfrog-up [var-level var-join-order var->bookkeeping ids->iterators]
   (let [var (nth var-join-order var-level)
-        indices (get-in var->bookkeeping [var :non-top-indices])
+        indices (get-in var->bookkeeping [var :indices])
         new-level (dec var-level)
         ids->iterators (reduce (fn [ids->iterators i] (update ids->iterators i #(g-index/up %))) ids->iterators indices)]
     (if (neg? new-level)

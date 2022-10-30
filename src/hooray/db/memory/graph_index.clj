@@ -370,15 +370,19 @@
       (nth (first data) depth)))
 
   (next [this]
-    (if (and (not end?) (or (empty? (rest data)) (= prefix (subvec (second data) 0 (count prefix)))))
-      (->SimpleIterator (rest data) prefix depth max-depth false)
-      (->SimpleIterator data prefix depth max-depth true)))
+    (with-meta
+      (if (and (not end?) (or (empty? (rest data)) (= prefix (subvec (second data) 0 (count prefix)))))
+        (->SimpleIterator (rest data) prefix depth max-depth false)
+        (->SimpleIterator data prefix depth max-depth true))
+      (meta this)))
 
   (seek [this k]
     (let [kk (conj prefix k)
           data (drop-while #(<= (compare (subvec % 0 (count kk)) kk) -1) data)]
-      (->SimpleIterator data prefix depth max-depth
-                        (or (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1)))))
+      (with-meta
+        (->SimpleIterator data prefix depth max-depth
+                          (or (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1)))
+        (meta this))))
 
   (at-end? [this]
     #_(or (empty? (rest data)) (<= (compare prefix (subvec (second data) 0 (count prefix))) -1))
@@ -392,7 +396,10 @@
   (up [this]
     #_(assert (> depth 0))
     #_(->SimpleIterator data (pop prefix) (dec depth) max-depth)
-    (->SimpleIterator data (pop-empty prefix) (dec depth) max-depth false))
+    (if (= depth 0)
+      ((-> this meta :original-itr) )
+      (with-meta (->SimpleIterator data (pop-empty prefix) (dec depth) max-depth false)
+        (meta this))))
 
   (level [this] depth)
 
@@ -402,7 +409,8 @@
   (.write w "#SimpleIterator{}"))
 
 (defn ->simple-iterator [data]
-  (->SimpleIterator data [] 0 (count (first data)) false))
+  (let [simple-itr (->SimpleIterator data [] 0 (count (first data)) false)]
+    (with-meta simple-itr {:original-itr #(->simple-iterator data)})))
 
 (defn tuple->simple-iterator [graph tuple]
   (->simple-iterator (get-from-index graph tuple)))
@@ -436,23 +444,27 @@
 
   (next [this]
     (if-not (at-end? this)
-      (->LeapIteratorCore (subvec index 1) stack depth max-depth)
+      (with-meta (->LeapIteratorCore (subvec index 1) stack depth max-depth) (meta this))
       this))
 
   (seek [this k]
     (when (seq index)
-      (->LeapIteratorCore (seek-key index k (inc depth) max-depth) stack depth max-depth)))
+      (with-meta (->LeapIteratorCore (seek-key index k (inc depth) max-depth) stack depth max-depth)
+        (meta this))))
 
   (at-end? [this] (empty? index))
 
   LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
-    (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth))
+    (with-meta (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth)
+      (meta this)))
 
   (up [this]
-    ;; (assert (> depth 0))
-    (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth))
+    (if (= depth 0)
+      ((-> this meta :original-itr))
+      (with-meta (->LeapIteratorCore (peek stack) (pop-empty stack) (dec depth) max-depth)
+        (meta this))))
 
   (level [this] depth)
 
@@ -462,28 +474,35 @@
   (.write w "#LeapIteratorCore{}"))
 
 (defn ->leap-iterator-core [index max-depth]
-  (->LeapIteratorCore (vec index) [] 0 max-depth))
+  (let [itr-core (->LeapIteratorCore (vec index) [] 0 max-depth)]
+    (with-meta itr-core {:original-itr #(->leap-iterator-core index max-depth)})))
 
 (defrecord LeapIteratorAVL [index stack depth max-depth]
   LeapIterator
   (key [this] (first-key index depth max-depth))
 
-  (next [this] (->LeapIteratorAVL (clojure.core/next index) stack depth max-depth))
+  (next [this]
+    (with-meta (->LeapIteratorAVL (clojure.core/next index) stack depth max-depth)
+      (meta this)))
 
   (seek [this k]
     (when (seq index)
-      (->LeapIteratorAVL (avl/seek index k) stack depth max-depth)))
+      (with-meta (->LeapIteratorAVL (avl/seek index k) stack depth max-depth)
+        (meta this))))
 
   (at-end? [this] (empty? index))
 
   LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
-    (->LeapIteratorAVL (-> index first second seq) (conj stack index) (inc depth) max-depth))
+    (with-meta (->LeapIteratorAVL (-> index first second seq) (conj stack index) (inc depth) max-depth)
+      (meta this)))
 
   (up [this]
-    #_(assert (> depth 0))
-    (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth))
+    (if (= depth 0)
+      ((-> this meta :original-itr))
+      (with-meta (->LeapIteratorAVL (peek stack) (pop-empty stack) (dec depth) max-depth)
+        (meta this))))
 
   (level [this] depth)
 
@@ -499,7 +518,8 @@
 
 (defn ->leap-iterator-avl [index max-depth]
   {:pre [(avl-index? index)]}
-  (->LeapIteratorAVL (seq index) [] 0 max-depth))
+  (let [avl-itr (->LeapIteratorAVL (seq index) [] 0 max-depth)]
+    (with-meta avl-itr {:original-itr #(->leap-iterator-avl index max-depth)})))
 
 (def ^:private iterator-types #{:simple :core :avl})
 
