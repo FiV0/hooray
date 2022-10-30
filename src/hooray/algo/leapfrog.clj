@@ -53,7 +53,7 @@
   (zipmap var-join-order (range)))
 
 (comment
-  (def vars (keys (var->indices(:where q-conformed))))
+  (def vars (keys (var->indices (:where q-conformed))))
   (def var->j-index (var->join-index vars))
   (triple+var->level-map (:where q-conformed) var->j-index))
 
@@ -274,7 +274,7 @@
             [?t :track/name ?name]]})
 
   (do
-    (def compiled-q  (query/compile-query2 q (get-db)))
+    (def compiled-q  (query/compile-query q (get-db)))
 
     (join compiled-q (get-avl-db)))
 

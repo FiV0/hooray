@@ -8,7 +8,8 @@
             [hooray.db.memory.graph-index]
             [hooray.graph :as graph]
             [hooray.query.spec :as hooray-spec]
-            [hooray.util :as util])
+            [hooray.util :as util]
+            [medley.core :refer [map-kv]])
   (:import (hooray.db.memory.graph MemoryGraph)
            (hooray.db.memory.graph_index MemoryGraphIndexed)))
 
@@ -75,13 +76,6 @@
 (defn order-by-bindings [v var->bindings]
   (sort-by var->bindings v))
 
-(defn compile-query [q db]
-  (let [q-plan (query-plan q db)]
-    (->
-     q-plan
-     #_(assoc :var->joins (var->joins q db q-plan))
-     (assoc :query q))))
-
 (defn compile-find [{:keys [query var->bindings] :as _compiled_q}]
   (let [find (:find query)]
     (if (seq find)
@@ -104,9 +98,14 @@
     {:var-join-order var-join-order
      :var->bindings (zipmap var-join-order (range))}))
 
-(defn compile-query2 [q db]
-  (let [q-plan (query-plan2 q db)
-        conformed-q (hooray-spec/conform-query q)]
+(defn- replace-wildcards [{:keys [where] :as q}]
+  (->> (mapv #(mapv (fn [v] (if (wildcard? v) (symbol (str "?" (gensym))) v)) %) where)
+       (assoc q :where )))
+
+(defn compile-query [q db]
+  (let [q (replace-wildcards q)
+        q-plan (query-plan2 q db)
+        conformed-q  (hooray-spec/conform-query q)]
     (-> q-plan
         (assoc :query q
                :conformed-query conformed-q))))
@@ -121,7 +120,7 @@
   (lf/join compiled-q db))
 
 (defn query [q db]
-  (let [compiled-q (compile-query2 q db)
+  (let [compiled-q (compile-query q db)
         find-fn (compile-find compiled-q)
         return-maps? (seq (select-keys q [:keys :syms :strs]))]
     (cond->> (join compiled-q db)
