@@ -38,13 +38,16 @@
     (f)
     (alter-var-root #'mem-gi/hash (constantly old))))
 
-(def ^:private db-urls ["hooray:mem://data"
-                        "hooray:mem:core//data"
-                        "hooray:mem:avl//data"])
+(def ^:private db-urls {{:type :mem :sub-type nil} "hooray:mem://data"
+                        {:type :mem :sub-type :core} "hooray:mem:core//data"
+                        {:type :mem :sub-type :avl} "hooray:mem:avl//data"})
+
+(def ^:dynamic *db-context* nil)
 
 (defn with-each-db-option* [f]
-  (doseq [db-url db-urls]
-    (binding [*conn* (hooray/connect db-url)]
+  (doseq [[ctx db-url] db-urls]
+    (binding [*db-context* ctx
+              *conn* (hooray/connect db-url)]
       (testing db-url
         (f)))))
 
