@@ -47,3 +47,21 @@
 
 (defn graph->ops [g]
   (map (fn [[from to]] [:db/add from :g/to to]) g))
+
+(defn- no-repetition [vars]
+  (loop [res [] vars vars]
+    (if (seq vars)
+      (recur (into res (map #(vector (list '!= (first vars) %)) (nthrest vars 2))) (rest vars))
+      res)))
+
+(comment
+  (no-repetition (range 4)))
+
+(defn k-path-query [k]
+  (let [vars (vec (repeatedly (inc k) #(symbol (str "?" (gensym)))))]
+    (-> {:find vars}
+        (assoc :where (mapv #(vector %1 :g/to %2) vars (rest vars)))
+        (update :where (comp vec concat) (no-repetition vars)))))
+
+(comment
+  (k-path-query 4))
