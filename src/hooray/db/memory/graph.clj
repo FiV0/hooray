@@ -1,7 +1,8 @@
 (ns hooray.db.memory.graph
-  (:require [hooray.util :as util :refer [dissoc-in]]
+  (:require [clojure.tools.logging :as log]
             [hooray.datom :as datom]
-            [hooray.graph :as graph]))
+            [hooray.graph :as graph]
+            [hooray.util :as util :refer [dissoc-in]]))
 
 ;; TODO remove the datoms part
 ;; on this level we should not be concerned with datoms
@@ -142,8 +143,10 @@
 ;; a nil v value is a problem
 (defmethod get-from-index '[:v :v :v]
   [{index :eav} [e a v]]
-  (if ((get-in index [e a]) v)
-    [[]]
+  (if-let [v-index (get-in index [e a])]
+    (if (v-index v)
+      [[]]
+      [])
     []))
 
 (def ^:private binary-index-remap
