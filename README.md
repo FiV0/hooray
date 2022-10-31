@@ -22,7 +22,7 @@ Experiments with Datalog and join algorithms.
 ```
 
 In case you want to experiment with a bigger dataset, you can bring
-in the [chinnook-db](https://github.com/FiV0/xtdb-chinook).
+in the [chinook-db](https://github.com/FiV0/xtdb-chinook).
 
 ```clj
 (require '[clojure.edn :as edn])
@@ -53,7 +53,7 @@ Some possible directions and improvements of this repository.
 - use B-trees
 - create a test suite to compare different join algorithms
 - persistency
-- views (Differential Dataflow, Materialized views (see [relic](https://github.com/wotbrew/relic))
+- views (Differential Dataflow, Materialized views (see [relic](https://github.com/wotbrew/relic)))
 
 ## License
 
