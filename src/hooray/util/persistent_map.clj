@@ -1,16 +1,36 @@
 (ns hooray.util.persistent-map
   (:require [me.tonsky.persistent-sorted-set :as set])
   (:import
-   (clojure.lang RT Util APersistentMap APersistentSet
-                 IPersistentMap IPersistentSet IPersistentStack
-                 Box MapEntry SeqIterator)
-   (me.tonsky.persistent_sorted_set PersistentSortedSet)
+   (clojure.lang RT IPersistentMap MapEntry )
+   (me.tonsky.persistent_sorted_set PersistentSortedSet ISeek Seq)
    (java.util Comparator )))
+
+(deftype PersistentSortedMapSeq [^Seq set-seq]
+  clojure.lang.Seqable
+  (seq [this]
+    this)
+
+  clojure.lang.Sequential
+  clojure.lang.ISeq
+  (first [this]
+    (when-let [e (first set-seq)]
+      (MapEntry. (first e) (second e))))
+
+  (more [this]
+    (if-let [next-seq (next set-seq)]
+      (PersistentSortedMapSeq. next-seq)
+      ()))
+
+  (next [this]
+    (.seq (.more this)))
+
+  ISeek
+  (seek [this k]
+    (when-let [new-seq (set/seek set-seq [k nil])]
+      (PersistentSortedMapSeq. new-seq))))
 
 (defprotocol getSet
   (get-set [this]))
-
-(declare create-seq)
 
 (deftype PersistentSortedMap [^PersistentSortedSet set ^IPersistentMap _meta]
   Object
@@ -23,7 +43,7 @@
 
   clojure.lang.IObj
   (withMeta [this meta]
-    (PersistentSortedMap set))
+    (PersistentSortedMap. set meta))
 
   clojure.lang.Counted
   (count [this]
@@ -66,12 +86,12 @@
   clojure.lang.Seqable
   (seq [this]
     (when (pos? (count set))
-      (create-seq set true)))
+      (PersistentSortedMapSeq. (seq set))))
 
   clojure.lang.Reversible
   (rseq [this]
     (when (pos? (count set))
-      (create-seq set false)))
+      (PersistentSortedMapSeq. (rseq set))))
 
   clojure.lang.ILookup
   (valAt [this k]
@@ -85,7 +105,8 @@
 
   clojure.lang.Associative
   (assoc [this k v]
-    (PersistentSortedMap. (conj set [k v]) _meta))
+    ;; the `disjoin` is needed as we o/w don't get an update
+    (PersistentSortedMap. (-> set (disj [k]) (conj [k v])) _meta))
 
   (containsKey [this k]
     (not (nil? (.entryAt this k))))
@@ -103,13 +124,21 @@
   (assocEx [this k v]
     (throw (UnsupportedOperationException.))))
 
-(defn- create-seq [set ascending?]
-  (let [seq-fn (if ascending? seq rseq)]
-    (->> set seq-fn (map (fn [[k v]] (MapEntry. k v))))))
-
 (defn persistent-sorted-map
-  ([] (PersistentSortedMap. (set/sorted-set) {}))
+  ([] (PersistentSortedMap. (set/sorted-set-by #(compare (first %1) (first %2))) {}))
   ([& kvs] (into (persistent-sorted-map) kvs)))
 
 (comment
-  (seq (persistent-sorted-map [1 2] [3 4])))
+  (seq (persistent-sorted-map [1 2] [3 4]))
+  (-> (seq (persistent-sorted-map [1 2] [3 4]))
+      (set/seek 2)))
+
+(defn persistent-sorted-map-by
+  ([cmp] (PersistentSortedMap. (set/sorted-set-by #(cmp (first %1) (first %2))) {}))
+  ([cmp & kvs] (into (persistent-sorted-map-by cmp) kvs)))
+
+(comment
+  (persistent-sorted-map-by #(compare (hash %1) (hash %2)) [1 2] [2 3])
+  (-> (seq (persistent-sorted-map-by #(compare (hash %1) (hash %2)) [1 2] [2 3]))
+      (set/seek 2))
+  (persistent-sorted-map-by #(compare (hash %1) (hash %2)) [1 2] [2 3] [1 3]))
