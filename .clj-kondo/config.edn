@@ -1,0 +1,13 @@
+{:lint-as {}
+ :output {:exclude-files []}
+ :skip-args []
+ :skip-comments true
+ :linters {:consistent-alias {:aliases {clojure.core.async async
+                                        clojure.java.io io
+                                        clojure.spec.alph s
+                                        clojure.string str
+                                        clojure.tools.logging log}}
+           :unresolved-symbol {:exclude [(clojure.core.match/match)
+                                         (clojure.test/is [match?])]}
+           :unused-namespace {:exclude [clojure.tools.logging]}}
+ :hooks {:analyze-call {}}}
