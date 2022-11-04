@@ -88,11 +88,11 @@
 
 (defn third [s] (nth s 2))
 
-(def it-type->ds-type {:simple :core :core :core :avl :avl})
+(def it-type->ds-type {:simple :core :core :core :avl :avl :tonsky :tonsky})
 
 (deftest simple-iterator-test
   (testing "correctness of simple-iterator"
-    (doseq [it-type '(:simple :core :avl)]
+    (doseq [it-type '(:simple :core :avl :tonsky)]
       (let [tdata [[:db/add 1 2 3]]
             tgraph (-> (mem-gi/memory-graph {:type (it-type->ds-type it-type)})
                        (g/transact tdata))

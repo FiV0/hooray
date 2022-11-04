@@ -8,7 +8,9 @@
             [hooray.util.avl :as avl-util]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
-            [hooray.util :as util :refer [dissoc-in]]))
+            [hooray.util :as util :refer [dissoc-in]]
+            [hooray.util.persistent-map :as tonsky-map]
+            [me.tonsky.persistent-sorted-set :as tonsky-set]))
 
 (s/def ::tuple (s/and (s/keys :req-un [::h-spec/triple ::h-spec/triple-order])
                       (fn [{:keys [triple triple-order]}] (= (count triple) (count triple-order)))))
@@ -65,14 +67,16 @@
 
 (defn sorted-set* [type]
   (case type
-    :core (sorted-set)
+    (:simple :core) (sorted-set)
     :avl (avl/sorted-set)
+    :tonsky (tonsky-set/sorted-set)
     (throw (ex-info "No such sorted-set type!" {:type type}))))
 
 (defn sorted-map* [type]
   (case type
     :core (sorted-map)
     :avl (avl/sorted-map)
+    :tonsky (tonsky-map/persistent-sorted-map)
     (throw (ex-info "No such sorted-map type!" {:type type}))))
 
 (defn memory-graph
@@ -114,9 +118,11 @@
 
 (defn index-triple-add [{opts :opts :as graph} [e a v :as triple]]
   (let [type (:type opts)
-        update-in (if (= type :core)
-                    (avl-util/create-update-in sorted-map)
-                    (avl-util/create-update-in avl/sorted-map))
+        update-in (case type
+                    (:simple :core) (avl-util/create-update-in sorted-map)
+                    :avl (avl-util/create-update-in avl/sorted-map)
+                    :tonsky (avl-util/create-update-in tonsky-map/persistent-sorted-map)
+                    (throw (ex-info "Unknown graph type!" {:type type})))
         [he ha hv] (->hash-triple triple)]
     (-> graph
         (update-in [:eav he ha] (fnil conj (sorted-set* type)) hv)
@@ -521,7 +527,51 @@
   (let [avl-itr (->LeapIteratorAVL (seq index) [] 0 max-depth)]
     (with-meta avl-itr {:original-itr #(->leap-iterator-avl index max-depth)})))
 
-(def ^:private iterator-types #{:simple :core :avl})
+(defrecord LeapIteratorTonsky [index stack depth max-depth]
+  LeapIterator
+  (key [this] (first-key index depth max-depth))
+
+  (next [this]
+    (with-meta (->LeapIteratorTonsky (clojure.core/next index) stack depth max-depth)
+      (meta this)))
+
+  (seek [this k]
+    (when (seq index)
+      (with-meta (->LeapIteratorTonsky (tonsky-set/seek index k) stack depth max-depth)
+        (meta this))))
+
+  (at-end? [this] (empty? index))
+
+  LeapLevels
+  (open [this]
+    (assert (< (inc depth) max-depth))
+    (with-meta (->LeapIteratorTonsky (-> index first second seq) (conj stack index) (inc depth) max-depth)
+      (meta this)))
+
+  (up [this]
+    (if (= depth 0)
+      ((-> this meta :original-itr))
+      (with-meta (->LeapIteratorTonsky (peek stack) (pop-empty stack) (dec depth) max-depth)
+        (meta this))))
+
+  (level [this] depth)
+
+  (depth [this] max-depth))
+
+(defmethod print-method LeapIteratorTonsky [_g ^java.io.Writer w]
+  (.write w "#LeapIteratorTonsky{}"))
+
+(defn- tonsky-index? [index]
+  (or (nil? index)
+      (instance? hooray.util.persistent_map.PersistentSortedMapSeq index)
+      (instance? me.tonsky.persistent_sorted_set.Seq index)))
+
+(defn ->leap-iterator-tonsky [index max-depth]
+  {:pre [(tonsky-index? index)]}
+  (let [tonsky-itr (->LeapIteratorTonsky (seq index) [] 0 max-depth)]
+    (with-meta tonsky-itr {:original-itr #(->leap-iterator-avl index max-depth)})))
+
+(def ^:private iterator-types #{:simple :core :avl :tonsky})
 
 #_(s/fdef get-iterator*
     :args (s/cat :graph any? :tuple ::tuple :type iterator-types))
@@ -549,6 +599,7 @@
       :simple (->simple-iterator (get-from-index graph tuple))
       :core (->leap-iterator-core (get-index graph tuple) nb-vars)
       :avl (->leap-iterator-avl (get-index graph tuple) nb-vars)
+      :tonsky (->leap-iterator-tonsky (get-index graph tuple) nb-vars)
       (throw (ex-info "todo" {})))))
 
 (defn set-iterator-level [itr l]
