@@ -10,7 +10,8 @@
             [hooray.query.spec :as h-spec]
             [hooray.util :as util :refer [dissoc-in]]
             [hooray.util.persistent-map :as tonsky-map]
-            [me.tonsky.persistent-sorted-set :as tonsky-set]))
+            [me.tonsky.persistent-sorted-set :as tonsky-set])
+  (:import (me.tonsky.persistent_sorted_set Seq)))
 
 (s/def ::tuple (s/and (s/keys :req-un [::h-spec/triple ::h-spec/triple-order])
                       (fn [{:keys [triple triple-order]}] (= (count triple) (count triple-order)))))
@@ -76,7 +77,7 @@
   (case type
     :core (sorted-map)
     :avl (avl/sorted-map)
-    :tonsky (tonsky-map/persistent-sorted-map)
+    :tonsky (tonsky-map/sorted-map)
     (throw (ex-info "No such sorted-map type!" {:type type}))))
 
 (defn memory-graph
@@ -121,7 +122,7 @@
         update-in (case type
                     (:simple :core) (avl-util/create-update-in sorted-map)
                     :avl (avl-util/create-update-in avl/sorted-map)
-                    :tonsky (avl-util/create-update-in tonsky-map/persistent-sorted-map)
+                    :tonsky (avl-util/create-update-in tonsky-map/sorted-map)
                     (throw (ex-info "Unknown graph type!" {:type type})))
         [he ha hv] (->hash-triple triple)]
     (-> graph
@@ -564,7 +565,21 @@
 (defn- tonsky-index? [index]
   (or (nil? index)
       (instance? hooray.util.persistent_map.PersistentSortedMapSeq index)
-      (instance? me.tonsky.persistent_sorted_set.Seq index)))
+      (instance? Seq index)))
+
+(comment
+  (.getClassLoader (class {}))
+  (.getClassLoader hooray.util.persistent_map.PersistentSortedMapSeq)
+  (.getClassLoader clojure.data.avl.AVLMap)
+  (.getClassLoader Seq)
+
+  (->> (.. java.lang.Thread currentThread getContextClassLoader)
+       (iterate #(.getParent %))
+       (take-while identity))
+
+
+  (tonsky-index? 'foo)
+  )
 
 (defn ->leap-iterator-tonsky [index max-depth]
   {:pre [(tonsky-index? index)]}

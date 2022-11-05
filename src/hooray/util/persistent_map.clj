@@ -30,7 +30,7 @@
 
   ISeek
   (seek [this k]
-    (when-let [new-seq nil #_(set/seek set-seq [k nil])]
+    (when-let [new-seq (set/seek set-seq [k nil])]
       (PersistentSortedMapSeq. new-seq))))
 
 (defprotocol getSet
