@@ -4,6 +4,12 @@ This is *very beta*.
 
 Experiments with Datalog and join algorithms.
 
+### Setup
+Before running anything you will need to run.
+```bash
+$ clj -X:deps prep
+```
+
 ### Examples
 
 ```clj
