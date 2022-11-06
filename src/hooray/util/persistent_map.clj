@@ -33,6 +33,9 @@
     (when-let [new-seq (set/seek set-seq [k nil])]
       (PersistentSortedMapSeq. new-seq))))
 
+(defn seek [seq k]
+  (.seek seq k))
+
 (defprotocol getSet
   (get-set [this]))
 
@@ -117,7 +120,7 @@
 
   ;; TO FIX
   (entryAt [this k]
-    (if-let [n (get set [k nil])]
+    (when-let [n (get set [k nil])]
       (MapEntry. (first n) (second n))))
 
   clojure.lang.MapEquivalence
@@ -135,77 +138,20 @@
 (comment
   (seq (sorted-map [1 2] [3 4]))
   (-> (seq (sorted-map [1 2] [3 4]))
-      (set/seek 2)))
+      (seek 2)))
 
 (defn sorted-map-by
   ([cmp] (PersistentSortedMap. (set/sorted-set-by #(cmp (first %1) (first %2))) {}))
   ([cmp & kvs] (into (sorted-map-by cmp) kvs)))
 
 (comment
-  (def key-fn #(compare (hash %1) (hash %2)))
-  (sorted-map-by key-fn [1 2] [2 3])
-  (-> (sorted-map-by key-fn [1 2] [2 3])
-      seq
-      (set/seek 2))
-
-  (-> (sorted-map-by key-fn)
-      (assoc 1 2)
-      (assoc 2 3)
-      seq
-      (set/seek 2))
-
-
-  (hash 1)
-  (hash 2)
-  (sorted-map-by #(compare (hash %1) (hash %2)) [1 2] [2 3] [1 3]))
-
-
-(comment
-  (-> (into (set/sorted-set-by #(compare (first %1) (first %2))) '([1 2] [2 3]))
-      seq
-      (set/seek [1]))
-
-  (def key-fn #(hash (first %)))
-  (def key-fn2 first)
-  (def data '([1 2] [2 3]))
-  (map key-fn data)
-
-  (hash 1)
-  ;; => 1392991556
-
-  (hash 2)
-  ;; => -971005196
-
-  (def key-fn #(- (first %)))
   (def key-fn -)
-  (def key-fn identity)
   (def cmp #(compare (key-fn %1) (key-fn %2)))
 
-  (-> (into (set/sorted-set-by cmp) '([1 2] [2 3]))
-      (set/slice [0] [5]))
-
-  (-> (into (set/sorted-set-by cmp) '(1 2 3))
-      (set/slice 0 5))
-
-  (-> (into (set/sorted-set-by cmp) '(1 2 3))
-      (set/slice -5 1))
-
-  (-> (into (set/sorted-set-by cmp) '(1 2 3))
-      (set/slice Integer/MIN_VALUE Integer/MAX_VALUE))
-
-
-
-
-  (-> (into (set/sorted-set-by cmp) '([1 2] [2 3]))
-      (set/slice [-1] [1392991557] cmp))
-
-
-  (-> (into (set/sorted-set-by #(compare (key-fn %1) (key-fn %2))) '([1 2] [2 3]))
+  (sorted-map-by cmp [1 2] [2 3])
+  (-> (sorted-map-by cmp [1 2] [2 3])
       seq
-      (set/seek [2 nil]))
+      (seek 1))
 
-  (-> (into (set/sorted-set-by #(compare (hash (first %1)) (hash (first %2)))) data)
-      seq
-      (set/seek [1 nil]))
-
-  )
+  (sorted-map [1 (sorted-map [2 3])])
+  (get (sorted-map [1 (sorted-map [2 3])]) 1))

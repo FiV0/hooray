@@ -5,7 +5,6 @@
             [clojure.edn :as edn]
             [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest testing is] :as t]
-            [hooray.db.memory.graph-index :as gi]
             [hooray.db.memory.graph-index :as mem-gi]
             [hooray.fixtures :as fix]
             [hooray.graph :as g]
@@ -65,10 +64,8 @@
      (-> (mem-gi/memory-graph {:type g-type})
          (g/transact tx-data)))))
 
-(def pos-or-zero? (complement neg?))
-
 (defn- move-up [it]
-  (if (and (mem-gi/at-end? it) (pos-or-zero? (mem-gi/level it)))
+  (if (and (mem-gi/at-end? it) (pos? (mem-gi/level it)))
     (move-up (mem-gi/next (mem-gi/up it)))
     it))
 
@@ -117,72 +114,31 @@
 (comment
   (require '[clojure.data.avl :as avl])
   (let [tdata [[:db/add 1 2 3]]
-        tgraph (-> (mem-gi/memory-graph {:type :avl})
+        tgraph (-> (mem-gi/memory-graph {:type :tonsky})
                    (g/transact tdata))
-        it (g/get-iterator tgraph tuple-3-vars :avl)]
+        it (g/get-iterator tgraph tuple-3-vars :tonsky)]
     (-> it mem-gi/open :index type #_(mem-gi/seek 2))
     ;; (-> it :index (avl/seek 1))
     )
   )
 
-(comment
-  (t/run-test-var #'simple-iterator-test))
+(defn- finished? [it]
+  (and (= (mem-gi/level it) 0) (mem-gi/at-end? it)))
 
-(deftest iteration-test-simple-iterator
+(deftest iteration-test-iterator
   (testing "correctness of iterator implementations"
-    (let [tdata (test-data 1000)
-          tgraph (test-graph tdata)
-          it (g/get-iterator tgraph tuple-3-vars)
-          it-index->data (loop [res {} it it]
-                           (if (mem-gi/at-end? it)
-                             res
-                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
-                                    (move-to-next it))))]
-      #_(is (instance? SimpleIterator it))
-      (is (= (get it-index->data 0) (map first tdata)))
-      (is (= (get it-index->data 1) (map second tdata)))
-      (is (= (get it-index->data 2) (map third tdata))))))
-
-(comment
-  (t/run-test-var #'iteration-test-simple-iterator))
-
-(deftest iteration-test-core-iterator
-  (testing "correctness of iterator implementations"
-    (let [tdata (test-data 1000)
-          tgraph (test-graph tdata)
-          it (g/get-iterator tgraph tuple-3-vars :core)
-          it-index->data (loop [res {} it it]
-                           (let [level (mem-gi/level it)]
-                             (if (= -1 level)
+    (doseq [it-type '(:simple :core :avl :tonsky)]
+      (let [tdata (test-data 1000)
+            tgraph (test-graph tdata (it-type->ds-type it-type))
+            it (g/get-iterator tgraph tuple-3-vars it-type)
+            it-index->data (loop [res {} it it]
+                             (if (finished? it)
                                res
-                               (recur (update res level (fnil conj []) (mem-gi/key it))
-                                      (move-to-next it)))))]
-      #_(is (instance? LeapIteratorCore it))
-      (is (= (get it-index->data 0) (map first tdata)))
-      (is (= (get it-index->data 1) (map second tdata)))
-      (is (= (get it-index->data 2) (map third tdata))))))
-
-(comment
-  (t/run-test-var #'iteration-test-core-iterator))
-
-(deftest iteration-test-avl-iterator
-  (testing "correctness of iterator implementations"
-    (let [tdata (test-data 1000)
-          tgraph (test-graph tdata :avl)
-          it (g/get-iterator tgraph tuple-3-vars :avl)
-          it-index->data (loop [res {} it it]
-                           (let [level (mem-gi/level it)]
-                             (if (= -1 level)
-                               res
-                               (recur (update res level (fnil conj []) (mem-gi/key it))
-                                      (move-to-next it)))))]
-      #_(is (instance? LeapIteratorAVL it))
-      (is (= (get it-index->data 0) (map first tdata)))
-      (is (= (get it-index->data 1) (map second tdata)))
-      (is (= (get it-index->data 2) (map third tdata))))))
-
-(comment
-  (t/run-test-var #'iteration-test-avl-iterator))
+                               (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                                      (move-to-next it))))]
+        (is (= (get it-index->data 0) (map first tdata)))
+        (is (= (get it-index->data 1) (map second tdata)))
+        (is (= (get it-index->data 2) (map third tdata)))))))
 
 (defn rand-int
   ([n] (clojure.core/rand-int n))
@@ -194,135 +150,42 @@
 (defn- more-homogenous-test-data [n k]
   (map vector (range-k n k) (range-k n k) (range n)))
 
-(last (more-homogenous-test-data 1000 7))
-
-(deftest seek-test-simple-iterator
-  (testing "correctness of iterator implementations"
-    (let [size 1000
-          tdata (more-homogenous-test-data 1000 7)
-          tgraph (test-graph tdata)
-          it (g/get-iterator tgraph tuple-3-vars)
-          it-index->data (loop [res {} it it]
-                           (let [level (mem-gi/level it)]
-                             (if (= -1 level)
-                               res
-                               (let [seek-target (rand-int (mem-gi/key it) (min (+ (mem-gi/key it) 3) size))
-                                     it (mem-gi/seek it seek-target)
-                                     k (mem-gi/key it)]
-                                 (if k
-                                   (recur (update res level (fnil conj []) k)
-                                          (move-to-next it))
-                                   (recur res
-                                          (move-to-next it)))))))]
-      #_(is (instance? SimpleIterator it))
-      (is (= (get it-index->data 0) (sort (get it-index->data 0))))
-      (is (= (get it-index->data 1) (sort (get it-index->data 1))))
-      (is (= (get it-index->data 2) (sort (get it-index->data 2)))))))
-
-(comment
-  (time (t/run-test-var #'seek-test-simple-iterator)))
-
-(deftest seek-test-core-iterator
-  (testing "correctness of iterator implementations"
-    (let [size 10
-          tdata (more-homogenous-test-data 1000 7)
-          tgraph (test-graph tdata)
-          it (g/get-iterator tgraph tuple-3-vars :core)
-          it-index->data (loop [res {} it it]
-                           (let [level (mem-gi/level it)]
-                             (if (= -1 level)
+(deftest seek-test-iterator
+  (testing "seek correctness of iterator implementations"
+    (doseq [it-type '(:simple :core :avl :tonsky)]
+      (let [size 1000
+            tdata (more-homogenous-test-data 1000 7)
+            tgraph (test-graph tdata (it-type->ds-type it-type))
+            it (g/get-iterator tgraph tuple-3-vars it-type)
+            it-index->data (loop [res {} it it]
+                             (if (finished? it)
                                res
                                (let [_ (assert (mem-gi/key it))
-                                     seek-target (rand-int (mem-gi/key it) size)
+                                     seek-target (rand-int (mem-gi/key it) (min (+ (mem-gi/key it) 3) size))
                                      it (mem-gi/seek it seek-target)
                                      k (mem-gi/key it)]
                                  (if k
-                                   (recur (update res level (fnil conj []) k)
+                                   (recur (update res (mem-gi/level it) (fnil conj []) k)
                                           (move-to-next it))
                                    (recur res
-                                          (move-to-next it)))))))]
-      #_(is (instance? LeapIteratorCore it))
-      (is (= (get it-index->data 0) (sort (get it-index->data 0))))
-      (is (= (get it-index->data 1) (sort (get it-index->data 1))))
-      (is (= (get it-index->data 2) (sort (get it-index->data 2)))))))
+                                          (move-to-next it))))))]
+        (is (= (get it-index->data 0) (sort (get it-index->data 0))))
+        (is (= (get it-index->data 1) (sort (get it-index->data 1))))
+        (is (= (get it-index->data 2) (sort (get it-index->data 2))))))))
 
-(comment
-  (time (t/run-test-var #'seek-test-core-iterator)))
+(def tuple-with-literals
+  (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
+                             :triple-order '[:e :a :v]}))
 
-(deftest seek-test-avl-iterator
-  (testing "correctness of iterator implementations"
-    (let [size 10
-          tdata (more-homogenous-test-data 1000 7)
-          tgraph (test-graph tdata :avl)
-          it (g/get-iterator tgraph tuple-3-vars :avl)
-          it-index->data (loop [res {} it it]
-                           (let [level (mem-gi/level it)]
-                             (if (= -1 level)
+(deftest get-iterator-literal-test
+  (testing "correctness of iterators with literal in tuple"
+    (doseq [it-type '(:simple :core :avl :tonsky)]
+      (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
+            tgraph (test-graph tdata (it-type->ds-type it-type))
+            it (g/get-iterator tgraph tuple-with-literals it-type)
+            it-index->data (loop [res {} it it]
+                             (if (mem-gi/at-end? it)
                                res
-                               (let [_ (assert (mem-gi/key it))
-                                     seek-target (rand-int (mem-gi/key it) size)
-                                     it (mem-gi/seek it seek-target)
-                                     k (mem-gi/key it)]
-                                 (if k
-                                   (recur (update res level (fnil conj []) k)
-                                          (move-to-next it))
-                                   (recur res
-                                          (move-to-next it)))))))]
-      #_(is (instance? LeapIteratorCore it))
-      (is (= (get it-index->data 0) (sort (get it-index->data 0))))
-      (is (= (get it-index->data 1) (sort (get it-index->data 1))))
-      (is (= (get it-index->data 2) (sort (get it-index->data 2)))))))
-
-(comment
-  (time (t/run-test-var #'seek-test-avl-iterator)))
-
-(deftest get-iterator-literal-simple-test
-  (testing "correctness of iterator implementations"
-    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
-          tgraph (test-graph tdata)
-          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
-                                                               :triple-order '[:e :a :v]}))
-          it-index->data (loop [res {} it it]
-                           (if (mem-gi/at-end? it)
-                             res
-                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
-                                    (move-to-next it))))]
-      #_(is (instance? SimpleIterator it))
-      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
-
-(comment
-  (t/run-test-var #'get-iterator-literal-simple-test))
-
-(deftest get-iterator-literal-core-test
-  (testing "correctness of iterator implementations"
-    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
-          tgraph (test-graph tdata :core)
-          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
-                                                               :triple-order '[:e :a :v]}))
-          it-index->data (loop [res {} it it]
-                           (if (mem-gi/at-end? it)
-                             res
-                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
-                                    (move-to-next it))))]
-      #_(is (instance? SimpleIterator it))
-      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
-
-(comment
-  (t/run-test-var #'get-iterator-literal-core-test))
-
-(deftest get-iterator-literal-avl-test
-  (testing "correctness of iterator implementations"
-    (let [tdata [[:foo :bar 1] [:foo :bar 2] [:foo :bar 3]]
-          tgraph (test-graph tdata :core)
-          it (g/get-iterator tgraph (s/conform ::mem-gi/tuple {:triple '[:foo :bar ?e]
-                                                               :triple-order '[:e :a :v]}))
-          it-index->data (loop [res {} it it]
-                           (if (mem-gi/at-end? it)
-                             res
-                             (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
-                                    (move-to-next it))))]
-      #_(is (instance? SimpleIterator it))
-      (is (= (into #{} (get it-index->data 0)) #{1 2 3})))))
-
-(comment
-  (t/run-test-var #'get-iterator-literal-avl-test))
+                               (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                                      (move-to-next it))))]
+        (is (= #{1 2 3} (into #{} (get it-index->data 0))))))))

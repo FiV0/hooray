@@ -538,7 +538,7 @@
 
   (seek [this k]
     (when (seq index)
-      (with-meta (->LeapIteratorTonsky (tonsky-set/seek index k) stack depth max-depth)
+      (with-meta (->LeapIteratorTonsky (tonsky-map/seek index k) stack depth max-depth)
         (meta this))))
 
   (at-end? [this] (empty? index))
@@ -564,20 +564,10 @@
 
 (defn- tonsky-index? [index]
   (or (nil? index)
-      (instance? hooray.util.persistent_map.PersistentSortedMapSeq index)
-      (instance? Seq index)))
+      (instance? hooray.util.persistent_map.PersistentSortedMap index)
+      (instance? me.tonsky.persistent_sorted_set.PersistentSortedSet index)))
 
 (comment
-  (.getClassLoader (class {}))
-  (.getClassLoader hooray.util.persistent_map.PersistentSortedMapSeq)
-  (.getClassLoader clojure.data.avl.AVLMap)
-  (.getClassLoader Seq)
-
-  (->> (.. java.lang.Thread currentThread getContextClassLoader)
-       (iterate #(.getParent %))
-       (take-while identity))
-
-
   (tonsky-index? 'foo)
   )
 

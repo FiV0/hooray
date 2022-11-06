@@ -23,10 +23,10 @@
   #_{:mvn/version "0.1.0"}
 
   persistent-sorted-set/persistent-sorted-set
+  {:git/url "https://github.com/FiV0/persistent-sorted-set.git"
+   :git/sha "5481a0fb2b8fbfc439982da94e378b47e63ffcea"}
   #_{:local/root "../persistent-sorted-set/"}
-  {:mvn/version "0.2.1"}
-  #_{:mvn/version "0.1.4"}
-  }
+  #_{:mvn/version "0.2.1"}}
 
  :aliases
  {:dev
