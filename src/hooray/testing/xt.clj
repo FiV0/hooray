@@ -25,25 +25,28 @@
          [?album :album/artist ?artist]
          [?artist :artist/name ?name]]})
 
+;;;;;;;;;;;;;;;;;
+;; triangle query
+;;;;;;;;;;;;;;;;;
 
-(query/query-plan-for (db) '{:find [?name]
-                             :where
-                             [[?t :track/name "Foo"]
-                              [?t :track/album "Foo"]]})
+(require '[hooray.graph-gen :as g-gen])
 
+(def random-graph (clojure.edn/read-string (slurp "resources/random-graph-100-0.3.edn")))
+(def random-independents (clojure.edn/read-string (slurp "resources/random-independents-graph-100-0.3.edn")))
 
-(comment
-  (require '[xtdb.query])
-  (sc.api/letsc [1 -1]
-                var->joins)
+(defn graph->ops [g]
+  (->> (g-gen/edge-list->adj-list g)
+       (map (fn [[from adj-list]] {:xt/id from :g/to (into #{} adj-list)}))))
 
-  (def n (xt/start-node {}))
-  (xt/submit-tx n [[::xt/put {:xt/id {:foo :bar} :data/foo 'foo}]])
+(def random-graph-data (graph->ops random-graph))
+(def random-independents-graph-data (graph->ops random-independents))
 
-  (xt/q (xt/db n)
-        '{:find [?e]
-          :where [[?e :data/foo foo]
-                  [(clojure.core/= foo 'foo)]]}
-        )
+(xt/submit-tx node (wrap-in-puts random-graph-data))
+(xt/submit-tx node (wrap-in-puts random-independents-graph-data))
 
-  )
+(def triangle-query '{:find [?a ?b ?c]
+                      :where [[?a :g/to ?b]
+                              [?a :g/to ?c]
+                              [?b :g/to ?c]]})
+
+(time (count (xt/q (db) triangle-query)))

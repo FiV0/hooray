@@ -1,5 +1,6 @@
 (ns hooray.graph-gen
-  (:require [clojure.math.combinatorics :as combo]))
+  (:require [clojure.math.combinatorics :as combo]
+            [medley.core :refer [map-kv]]))
 
 (defn complete-graph [n]
   (for [i (range n) j (range (inc i) n)]
@@ -47,6 +48,10 @@
 
 (defn graph->ops [g]
   (map (fn [[from to]] [:db/add from :g/to to]) g))
+
+(defn edge-list->adj-list [g]
+  (->> (group-by first g)
+       (map-kv (fn [k v] [k (mapv second v)]))))
 
 (defn- no-repetition [vars]
   (loop [res [] vars vars]
