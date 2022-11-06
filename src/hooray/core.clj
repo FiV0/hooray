@@ -29,15 +29,18 @@
     (def conn (connect "hooray:mem://data"))
     (def conn-core (connect "hooray:mem:core//data"))
     (def conn-avl (connect "hooray:mem:avl//data"))
+    (def conn-tonsky (connect "hooray:mem:tonsky//data"))
     (transact conn data)
     (transact conn-core data)
     (transact conn-avl data)
+    (transact conn-tonsky data)
 
     (defn db-bin [] (db conn))
     (defn db-core [] (db conn-core))
-    (defn db-avl [] (db conn-avl)))
+    (defn db-avl [] (db conn-avl))
+    (defn db-tonsky [] (db conn-tonsky)))
 
-  (for [db-fn [db-bin db-core db-avl]]
+  (for [db-fn [db-bin db-core db-avl db-tonsky]]
     (util/with-timing
       (q '{:find [?name ?album]
            :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
@@ -51,4 +54,4 @@
                      [?t :track/album ?album]
                      [?album :album/artist ?artist]
                      [?artist :artist/name ?name]]}
-           (db-bin))))
+           (db-tonsky))))

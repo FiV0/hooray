@@ -44,7 +44,7 @@
 (defmethod db/connect* :mem [{:keys [name sub-type] :as uri-map}]
   (let [db (case sub-type
              (nil :graph) (->MemoryDatabase (mem-graph/memory-graph) [] (util/now))
-             (:avl :core) (->MemoryDatabase (g-index/memory-graph {:type sub-type}) [] (util/now))
+             (:core :avl :tonsky) (->MemoryDatabase (g-index/memory-graph {:type sub-type}) [] (util/now))
              (throw (util/illegal-ex (str "No such db sub-type " sub-type))))]
     (->MemoryConnection name (atom {:db db}) [:mem sub-type])))
 

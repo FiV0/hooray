@@ -40,7 +40,8 @@
 
 (def ^:private db-urls {{:type :mem :sub-type nil} "hooray:mem://data"
                         {:type :mem :sub-type :core} "hooray:mem:core//data"
-                        {:type :mem :sub-type :avl} "hooray:mem:avl//data"})
+                        {:type :mem :sub-type :avl} "hooray:mem:avl//data"
+                        {:type :mem :sub-type :tonsky} "hooray:mem:tonsky//data"})
 
 (def ^:dynamic *db-context* nil)
 

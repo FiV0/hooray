@@ -574,7 +574,7 @@
 (defn ->leap-iterator-tonsky [index max-depth]
   {:pre [(tonsky-index? index)]}
   (let [tonsky-itr (->LeapIteratorTonsky (seq index) [] 0 max-depth)]
-    (with-meta tonsky-itr {:original-itr #(->leap-iterator-avl index max-depth)})))
+    (with-meta tonsky-itr {:original-itr #(->leap-iterator-tonsky index max-depth)})))
 
 (def ^:private iterator-types #{:simple :core :avl :tonsky})
 

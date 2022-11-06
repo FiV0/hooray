@@ -112,6 +112,8 @@
 
 ;; TODO move this down to the actual namespaces
 (defmulti join (fn [_compiled-q db] (type (db/graph db))))
+(defmethod join :default [_compiled-q db]
+  (throw (ex-info "Graph type not known!!!" {:graph-type (type (db/graph db))})))
 
 (defmethod join MemoryGraph [compiled-q db]
   (hj/join compiled-q db))
