@@ -14,8 +14,6 @@
        :name db-name}
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 
-(parse-uri "hooray:mem:avl:generic//data")
-
 (comment
   (ns-unmap *ns* 'connect*)
   )

@@ -28,7 +28,3 @@
                                     [?t :track/album ?album]
                                     [?t :track/name ?track-name]]}
                           (db/db *conn*)))))))
-
-
-(comment
-  (t/run-tests))

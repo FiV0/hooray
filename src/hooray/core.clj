@@ -53,9 +53,10 @@
                    [?artist :artist/name ?name]]}
          (db-fn))))
 
-  (time (q '{:find [?name ?album]
-             :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
-                     [?t :track/album ?album]
+  (time (q '{:find [?track-name ?album-title]
+             :where [[?artist :artist/name "Ozzy Osbourne"]
                      [?album :album/artist ?artist]
-                     [?artist :artist/name ?name]]}
-           (db-tonsky))))
+                     [?album :album/title ?album-title]
+                     [?t :track/album ?album]
+                     [?t :track/name ?track-name]]}
+           (db-generic))))

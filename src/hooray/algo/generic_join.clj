@@ -1,11 +1,12 @@
 (ns hooray.algo.generic-join
   (:refer-clojure :exclude [count extend])
-  (:require [clojure.data.avl :as avl]
-            [clojure.core.match :refer [match]]
+  (:require [clojure.core.match :refer [match]]
+            [clojure.data.avl :as avl]
+            [clojure.spec.alpha :as s]
             [hooray.db :as db]
-            [hooray.util :as util]
+            [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
-            [hooray.db.memory.graph-index :as g-index]))
+            [hooray.util :as util]))
 
 ;; generic-join
 ;; based on
@@ -17,9 +18,12 @@
   (propose [this prefix])
   (intersect [this prefix extensions]))
 
+(s/def ::prefix (s/coll-of integer? :kind vector?))
+
 (defn prefix->tuple [prefix pattern var-join-order]
-  {:pre [(< (clojure.core/count prefix) (clojure.core/count var-join-order))]}
-  (let [var->bindings (zipmap var-join-order (range 10))
+  {:pre [(< (clojure.core/count prefix) (clojure.core/count var-join-order))
+         #_(s/valid? ::prefix prefix)]}
+  (let [var->bindings (zipmap var-join-order (range))
         size (clojure.core/count prefix)
         next-var (nth var-join-order size)]
     (match (mapv (fn [v] (cond (and (util/variable? v) (< (var->bindings v) size))
@@ -67,6 +71,7 @@
   (binary-search [0 1] 0)
   (binary-search [] 12))
 
+
 (defrecord PatternPrefixExtender [pattern var-join-order graph]
   PrefixExtender
   (count [this prefix]
@@ -88,7 +93,7 @@
             (let [first-ext (nth extensions pos)
                   first-s (first-index s)]
               (cond (= first-s first-ext)
-                    (recur (conj res (first s))
+                    (recur (conj res first-s)
                            (inc pos)
                            (next s))
                     (< first-s first-ext)
