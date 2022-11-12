@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
+            [hooray.algo.generic-join :as gj]
             [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.memory.graph]
@@ -119,7 +120,7 @@
   (hj/join compiled-q db))
 
 (defmethod join MemoryGraphIndexed [compiled-q db]
-  (lf/join compiled-q db))
+  (gj/join compiled-q db))
 
 (defn query [q db]
   (let [compiled-q (compile-query q db)

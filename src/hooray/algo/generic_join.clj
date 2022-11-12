@@ -32,9 +32,13 @@
   (let [var->bindings (zipmap var-join-order (range 10))
         size (clojure.core/count prefix)
         next-var (nth var-join-order size)]
-    (match (mapv (fn [v] (if (and (util/variable? v) (< (var->bindings v) size))
+    (match (mapv (fn [v] (cond
+                           (and (util/variable? v) (< (var->bindings v) size))
                            [(nth prefix (var->bindings v)) true]
-                           [v (util/constant? v)])) pattern)
+                           (util/constant? v)
+                           [(g-index/hash v) true]
+                           :else
+                           [v false])) pattern)
       [[next-var _] [a true] [v true]] {:triple [a v next-var] :triple-order [:a :v :e]}
       [[next-var _] [_ false] [v true]] {:triple [v next-var] :triple-order [:v :e]}
       [[next-var _] [a true] [_ false]] {:triple [a next-var] :triple-order [:a :e]}
@@ -72,6 +76,13 @@
   (binary-search [0 1] 0)
   (binary-search [] 12))
 
+(comment
+  (require 'sc.api)
+  (sc.api/letsc [2 -2]
+                s)
+
+  )
+
 (defrecord PatternPrefixExtender [pattern var-join-order graph]
   PrefixExtender
   (count [this prefix]
@@ -89,7 +100,7 @@
           nb-exts (clojure.core/count extensions)]
       (if (seq extensions)
         (loop [res [] pos 0 s (seq index)]
-          (if (or (nil? s) (< pos nb-exts))
+          (if (and (seq s) (< pos nb-exts))
             (let [first-ext (nth extensions pos)
                   first-s (first-index s)]
               (cond (= first-s first-ext)
@@ -112,9 +123,9 @@
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
-  {:pre [(assert (> (clojure.core/count extenders) 0))]}
+  {:pre [(> (clojure.core/count extenders) 0) "Need at least 1 extender!"]}
   (let [[extender _] (->> (map #(vector % (count % prefix)) extenders)
-                          (reduce (fn [[_e1 c1 :as r1] [_e2 c2 :as r2]] (if (> c1 c2) r1 r2)) extenders))
+                          (reduce (fn [[_e1 c1 :as r1] [_e2 c2 :as r2]] (if (> c1 c2) r1 r2))))
         remaining (remove #{extender} extenders)
         extensions (propose extender prefix)
         extensions (reduce #(intersect %2 prefix %1) extensions remaining)]
