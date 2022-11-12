@@ -39,6 +39,7 @@
 (declare memory-graph)
 (declare get-from-index)
 (declare transact)
+(declare get-index)
 (declare get-from-index)
 (declare get-iterator*)
 
@@ -58,7 +59,7 @@
   graph/GraphIndex
   (resolve-tuple [this tuple]
     (s/assert ::tuple tuple)
-    (get-from-index this tuple))
+    (get-index this tuple))
 
   (get-iterator [this tuple] (get-iterator* this tuple :simple))
   (get-iterator [this tuple type] (get-iterator* this tuple type)))
@@ -348,6 +349,32 @@
 (defmethod get-index '[:v :v :v]
   [graph {[t1 t2 t3] :triple-order [v1 v2 v3] :triple :as _tuple}]
   (throw (ex-info "todo" {})))
+
+(defmethod get-index '[? ?]
+  [graph {[t1 t2] :triple-order :as _tuple}]
+  (get graph (keyword (str (name t1) (name t2)) (name (first (missing #{t1 t2}))))))
+
+(defmethod get-index '[? :v]
+  [graph {[t1 t2] :triple-order [_ v2] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t2) (name t1) (name (first (missing #{t1 t2}))))) v2]))
+
+(defmethod get-index '[:v ?]
+  [graph {[t1 t2] :triple-order [v1 _] :triple :as _tuple}]
+  (get-in graph [(keyword (str (name t1) (name t2) (name (first (missing #{t1 t2}))))) v1]))
+
+(defmethod get-index '[:v :v]
+  [graph {[t1 t2] :triple-order [v1 v2] :triple :as _tuple}]
+  (throw (ex-info "todo" {})))
+
+(defmethod get-index '[?]
+  [graph {[t1] :triple-order :as _tuple}]
+  (let [missing (missing #{t1})]
+    (get graph (keyword (str (name t1) (name (first missing)) (name (second missing)))))))
+
+(defmethod get-from-index '[:v]
+  [graph {[t1] :triple-order [v1] :triple :as _tuple}]
+  (throw (ex-info "todo" {})))
+
 
 ;; FIXME maybe do a stateful and non-stateful version
 ;; TODO think about if next should go one level up
