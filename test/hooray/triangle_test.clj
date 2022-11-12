@@ -19,7 +19,6 @@
     (is (= 161700
            (count (h/q triangle-query (h/db *conn*)))))))
 
-
 (deftest complete-bipartite-test
   (testing "triangle query bipartite 100"
     (h/transact *conn* (g/graph->ops (g/complete-bipartite 100)))

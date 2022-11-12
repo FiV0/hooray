@@ -72,19 +72,19 @@
   (binary-search [] 12))
 
 
-(defrecord PatternPrefixExtender [pattern var-join-order graph]
+(defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn]
   PrefixExtender
   (count [this prefix]
-    (clojure.core/count (graph/resolve-tuple graph (prefix->tuple prefix pattern var-join-order))))
+    (clojure.core/count (resolve-tuple-fn graph (prefix->tuple-fn prefix pattern var-join-order))))
 
   (propose [this prefix]
-    (let [index (graph/resolve-tuple graph (prefix->tuple prefix pattern var-join-order))]
+    (let [index (resolve-tuple-fn graph (prefix->tuple-fn prefix pattern var-join-order))]
       (cond (set? index) (into [] (seq index))
             (map? index) (into [] (keys index))
             :else (throw (ex-info "No propose op for this index type!" {:index-type (type index)})))))
 
   (intersect [this prefix extensions]
-    (let [index (graph/resolve-tuple graph (prefix->tuple prefix pattern var-join-order))
+    (let [index (resolve-tuple-fn graph (prefix->tuple prefix pattern var-join-order))
           first-index (if (set? index) first ffirst)
           nb-exts (clojure.core/count extensions)]
       (if (seq extensions)
@@ -108,7 +108,9 @@
         extensions))))
 
 (defn- ->pattern-prefix-extender [pattern var-join-order graph]
-  (->PatternPrefixExtender pattern var-join-order graph))
+  (->PatternPrefixExtender pattern var-join-order graph
+                           (memoize graph/resolve-tuple)
+                           (memoize prefix->tuple)))
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
@@ -126,7 +128,7 @@
 (defn- lookup-row [graph row]
   (mapv #(g-index/hash->value graph %) row))
 
-(defn join [{:keys [conformed-query query var-join-order var->bindings] :as _compiled-q} db]
+(defn join [{:keys [conformed-query query var-join-order _var->bindings] :as _compiled-q} db]
   {:pre [(vector? var-join-order)]}
   (if-let [where (:where query)]
     (let [graph (db/graph db)
