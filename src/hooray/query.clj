@@ -1,8 +1,8 @@
 (ns hooray.query
   (:require [clojure.string :as str]
+            [hooray.algo.generic-join :as gj]
             [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
-            [hooray.algo.generic-join :as gj]
             [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.memory.graph]
@@ -112,15 +112,21 @@
                :conformed-query conformed-q))))
 
 ;; TODO move this down to the actual namespaces
-(defmulti join (fn [_compiled-q db] (type (db/graph db))))
+(defmulti join (fn [_compiled-q db]
+                 (type (db/graph db))))
+
 (defmethod join :default [_compiled-q db]
   (throw (ex-info "Graph type not known!!!" {:graph-type (type (db/graph db))})))
 
 (defmethod join MemoryGraph [compiled-q db]
   (hj/join compiled-q db))
 
-(defmethod join MemoryGraphIndexed [compiled-q db]
-  (gj/join compiled-q db))
+(defmethod join MemoryGraphIndexed [compiled-q {:keys [opts] :as db}]
+  (let [algo (-> opts :uri-map :algo)]
+    (case algo
+      (nil :leapfrog) (lf/join compiled-q db)
+      :generic (gj/join compiled-q db)
+      (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
 (defn query [q db]
   (let [compiled-q (compile-query q db)

@@ -11,7 +11,7 @@
            (hooray.db.memory.graph MemoryGraph)
            (hooray.db.memory.graph_index MemoryGraphIndexed)))
 
-(defrecord MemoryDatabase [graph history timestamp]
+(defrecord MemoryDatabase [graph history timestamp opts]
   db/Database
   (as-of [this t] (throw (ex-info "todo" {})))
   (as-of-t [this] timestamp)
@@ -41,17 +41,19 @@
   (close [_] ;; a no-op for memory databases
     nil))
 
-(defmethod db/connect* :mem [{:keys [name sub-type] :as uri-map}]
-  (let [db (case sub-type
-             (nil :graph) (->MemoryDatabase (mem-graph/memory-graph) [] (util/now))
-             (:core :avl :tonsky) (->MemoryDatabase (g-index/memory-graph {:type sub-type}) [] (util/now))
+(defmethod db/connect* :mem [{:keys [name type sub-type] :as uri-map}]
+  (let [opts {:uri-map uri-map}
+        db (case sub-type
+             (nil :graph) (->MemoryDatabase (mem-graph/memory-graph) [] (util/now) opts)
+             (:core :avl :tonsky) (->MemoryDatabase (g-index/memory-graph {:type sub-type}) [] (util/now) opts)
              (throw (util/illegal-ex (str "No such db sub-type " sub-type))))]
-    (->MemoryConnection name (atom {:db db}) [:mem sub-type])))
+    (->MemoryConnection name (atom {:db db}) type)))
 
 
-(defmethod db/connect* :bi-mem [{:keys [name] :as uri-map}]
-  (let [db (->MemoryDatabase (bi-graph/memory-bitemp-graph) [] (util/now))]
-    (->MemoryConnection name (atom {:db db}) [:bi-mem])))
+(defmethod db/connect* :bi-mem [{:keys [name type] :as uri-map}]
+  (let [opts {:uri-map uri-map}
+        db (->MemoryDatabase (bi-graph/memory-bitemp-graph) [] (util/now) opts)]
+    (->MemoryConnection name (atom {:db db}) type)))
 
 (s/def :hooray/map-transaction map?)
 (s/def :hooray/add-transaction #(and (= :db/add (first %)) (vector? %) (= 4 (count %))))
@@ -78,7 +80,7 @@
     (= :db/retract (first transaction)) [(apply ->Datom (concat (rest transaction) [ts false]))]))
 
 (defn transact* [{:keys [state type] :as _connection} tx-data]
-  (case (first type)
+  (case type
     :mem (s/assert :hooray/tx-data tx-data)
     :bi-mem nil
     (throw (ex-info "No such connection type!" {:type type})))
@@ -87,9 +89,9 @@
         [{db-before :db} {db-after :db}]
         (swap-vals! state
                     (fn [{db-before :db}]
-                      (let [{:keys [graph history]} db-before
+                      (let [{:keys [graph history opts]} db-before
                             new-graph (graph/transact graph tx-data ts)]
-                        {:db (->MemoryDatabase new-graph (conj history db-before) ts)})))]
+                        {:db (->MemoryDatabase new-graph (conj history db-before) ts opts)})))]
     {:db-before db-before
      :db-after db-after
      ;; :tx-data datoms

@@ -7,12 +7,14 @@
   [uri]
   (if (map? uri)
     uri
-    (if-let [[_ db-type sub-type db-name] (re-find #"hooray:([^:]+):([^:]*)//(.+)" uri)]
+    (if-let [[_ db-type sub-type algo db-name] (re-find #"hooray:([^:]+):([^:]*)(:[^:]*)?//(.+)" uri)]
       {:type (keyword db-type)
        :sub-type (if (str/blank? sub-type) nil (keyword sub-type))
+       :algo (if (str/blank? algo) nil (keyword (subs algo 1)))
        :name db-name}
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 
+(parse-uri "hooray:mem:avl:generic//data")
 
 (comment
   (ns-unmap *ns* 'connect*)

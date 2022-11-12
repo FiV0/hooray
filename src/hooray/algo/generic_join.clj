@@ -12,16 +12,6 @@
 ;; http://www.frankmcsherry.org/dataflow/relational/join/2015/04/11/genericjoin.html
 ;; https://arxiv.org/abs/1310.3314
 
-(defprotocol ISeek
-  (seek
-    [this k]
-    [this k cmp]))
-
-(extend-protocol ISeek
-  clojure.lang.PersistentVector
-  (seek [this k] (throw (ex-info "toto" {})))
-  (seek [this k cmp] (throw (ex-info "toto" {}))) )
-
 (defprotocol PrefixExtender
   (count [this prefix])
   (propose [this prefix])
@@ -32,13 +22,14 @@
   (let [var->bindings (zipmap var-join-order (range 10))
         size (clojure.core/count prefix)
         next-var (nth var-join-order size)]
-    (match (mapv (fn [v] (cond
-                           (and (util/variable? v) (< (var->bindings v) size))
-                           [(nth prefix (var->bindings v)) true]
-                           (util/constant? v)
-                           [(g-index/hash v) true]
-                           :else
-                           [v false])) pattern)
+    (match (mapv (fn [v] (cond (and (util/variable? v) (< (var->bindings v) size))
+                               [(nth prefix (var->bindings v)) true]
+
+                               (util/constant? v)
+                               [(g-index/hash v) true]
+
+                               :else
+                               [v false])) pattern)
       [[next-var _] [a true] [v true]] {:triple [a v next-var] :triple-order [:a :v :e]}
       [[next-var _] [_ false] [v true]] {:triple [v next-var] :triple-order [:v :e]}
       [[next-var _] [a true] [_ false]] {:triple [a next-var] :triple-order [:a :e]}
@@ -75,13 +66,6 @@
   (binary-search [0 1] 1)
   (binary-search [0 1] 0)
   (binary-search [] 12))
-
-(comment
-  (require 'sc.api)
-  (sc.api/letsc [2 -2]
-                s)
-
-  )
 
 (defrecord PatternPrefixExtender [pattern var-join-order graph]
   PrefixExtender
@@ -141,12 +125,10 @@
   {:pre [(vector? var-join-order)]}
   (if-let [where (:where query)]
     (let [graph (db/graph db)
-          ;; extenders (mapv #(->pattern-prefix-extender % var-join-order graph) where)
           var->extenders
           (reduce (fn [v->e clause]
                     (let [vars (filter util/variable? clause)]
-                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph)) v->e vars)
-                      ))
+                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph)) v->e vars)))
                   {} where)]
       (loop [res '([]) level 0]
         (if (= level (clojure.core/count var-join-order))
