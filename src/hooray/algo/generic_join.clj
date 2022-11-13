@@ -81,7 +81,7 @@
 (def idx->name {0 :e 1 :a 2 :v})
 
 (defn- pos->literal [var? var->bindings prefix]
-  (cond (util/constant? var?) var?
+  (cond (util/constant? var?) (g-index/hash var?)
         (< (var->bindings var?) (clojure.core/count prefix))
         (nth prefix (var->bindings var?))
         :else nil))
@@ -93,8 +93,8 @@
             next-var (nth var-join-order size)
             next-var-idx (next-var-index pattern next-var)
             [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
-            i-literal (-> (nth pattern i) (pos->literal var->bindings prefix) g-index/hash)
-            j-literal (-> (nth pattern j) (pos->literal var->bindings prefix) g-index/hash)]
+            i-literal (pos->literal (nth pattern i) var->bindings prefix)
+            j-literal (pos->literal (nth pattern j) var->bindings prefix)]
         (cond-> {:triple-order [] :triple []}
 
           i-literal
@@ -156,7 +156,7 @@
   (->PatternPrefixExtender pattern var-join-order graph
                            (memoize graph/resolve-tuple)
                            #_(memoize prefix->tuple)
-                           (prefix->tuple-fn pattern var-join-order)))
+                           (memoize (prefix->tuple-fn pattern var-join-order))))
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
