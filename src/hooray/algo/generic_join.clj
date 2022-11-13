@@ -2,14 +2,14 @@
   (:refer-clojure :exclude [count extend])
   (:require [clojure.core.match :refer [match]]
             [clojure.data.avl :as avl]
+            [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.util :as util]))
 
-;; generic-join
-;; based on
+;; generic-join based on
 ;; http://www.frankmcsherry.org/dataflow/relational/join/2015/04/11/genericjoin.html
 ;; https://arxiv.org/abs/1310.3314
 
@@ -22,7 +22,7 @@
 
 (defn prefix->tuple [prefix pattern var-join-order]
   {:pre [(< (clojure.core/count prefix) (clojure.core/count var-join-order))
-         #_(s/valid? ::prefix prefix)]}
+         (s/valid? ::prefix prefix)]}
   (let [var->bindings (zipmap var-join-order (range))
         size (clojure.core/count prefix)
         next-var (nth var-join-order size)]
@@ -71,20 +71,65 @@
   (binary-search [0 1] 0)
   (binary-search [] 12))
 
+(defn- next-var-index [pattern var]
+  (cond
+    (= (nth pattern 0) var) 0
+    (= (nth pattern 1) var) 1
+    (= (nth pattern 2) var) 2
+    :else (throw (ex-info "Var not in pattern!" {:var var :pattern var}))))
+
+(def idx->name {0 :e 1 :a 2 :v})
+
+(defn- pos->literal [var? var->bindings prefix]
+  (cond (util/constant? var?) var?
+        (< (var->bindings var?) (clojure.core/count prefix))
+        (nth prefix (var->bindings var?))
+        :else nil))
+
+(defn prefix->tuple-fn [pattern var-join-order]
+  (let [var->bindings (zipmap var-join-order (range))]
+    (fn prefix->tuple [prefix]
+      (let [size (clojure.core/count prefix)
+            next-var (nth var-join-order size)
+            next-var-idx (next-var-index pattern next-var)
+            [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
+            i-literal (-> (nth pattern i) (pos->literal var->bindings prefix) g-index/hash)
+            j-literal (-> (nth pattern j) (pos->literal var->bindings prefix) g-index/hash)]
+        (cond-> {:triple-order [] :triple []}
+
+          i-literal
+          (-> (update :triple-order conj (idx->name i))
+              (update :triple conj i-literal))
+
+          j-literal
+          (-> (update :triple-order conj (idx->name j))
+              (update :triple conj j-literal))
+
+          true
+          (-> (update :triple-order conj (idx->name next-var-idx))
+              (update :triple conj next-var)))))))
 
 (defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn]
   PrefixExtender
-  (count [this prefix]
-    (clojure.core/count (resolve-tuple-fn graph (prefix->tuple-fn prefix pattern var-join-order))))
+  (count [_this prefix]
+    (clojure.core/count (resolve-tuple-fn graph
+                                          #_(prefix->tuple-fn prefix pattern var-join-order)
+                                          (prefix->tuple-fn prefix))))
 
-  (propose [this prefix]
-    (let [index (resolve-tuple-fn graph (prefix->tuple-fn prefix pattern var-join-order))]
-      (cond (set? index) (into [] (seq index))
-            (map? index) (into [] (keys index))
-            :else (throw (ex-info "No propose op for this index type!" {:index-type (type index)})))))
+  (propose [_this prefix]
+    (let [index (resolve-tuple-fn graph
+                                  #_(prefix->tuple-fn prefix pattern var-join-order)
+                                  (prefix->tuple-fn prefix))]
+      (cond
+        (set? index) (into [] (seq index))
+        (map? index) (into [] (keys index))
+        (nil? index) []
+        :else (throw (ex-info "No propose op for this index type!" {:index-type (type index)})))))
 
-  (intersect [this prefix extensions]
-    (let [index (resolve-tuple-fn graph (prefix->tuple prefix pattern var-join-order))
+  (intersect [_this prefix extensions]
+    (let [index (resolve-tuple-fn graph
+                                  #_(prefix->tuple-fn prefix pattern var-join-order)
+                                  (prefix->tuple-fn prefix))
           first-index (if (set? index) first ffirst)
           nb-exts (clojure.core/count extensions)]
       (if (seq extensions)
@@ -110,11 +155,12 @@
 (defn- ->pattern-prefix-extender [pattern var-join-order graph]
   (->PatternPrefixExtender pattern var-join-order graph
                            (memoize graph/resolve-tuple)
-                           (memoize prefix->tuple)))
+                           #_(memoize prefix->tuple)
+                           (prefix->tuple-fn pattern var-join-order)))
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
-  {:pre [(> (clojure.core/count extenders) 0) "Need at least 1 extender!"]}
+  {:pre [(> (clojure.core/count extenders) 0)]}
   (let [[extender _] (->> (map #(vector % (count % prefix)) extenders)
                           (reduce (fn [[_e1 c1 :as r1] [_e2 c2 :as r2]] (if (> c1 c2) r1 r2))))
         remaining (remove #{extender} extenders)

@@ -68,6 +68,7 @@
                 (db/db *conn*))))))
 
 ;; TODO broken on every db so far
+#_(ns-unmap *ns* 'pattern-with-same-var-test)
 #_
 (deftest pattern-with-same-var-test
   (testing "same var multiple times in pattern"
