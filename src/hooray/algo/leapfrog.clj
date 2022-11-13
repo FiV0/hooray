@@ -195,7 +195,7 @@
           tuples (->> (filter (comp #{:triple} first) where)
                       (mapv (comp #(triple->tuple % var->bindings) second)))
           idx->iterators (->> (map #(graph/get-iterator graph % graph-type) tuples)
-                              (zipmap (range max-level)))
+                              (zipmap (range)))
           ;; we add a dummy var to bottom out, simplifies the code below
           dummy-var (gensym "?dummy-var")
           var-join-order (conj var-join-order dummy-var)
