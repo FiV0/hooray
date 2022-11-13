@@ -2,29 +2,98 @@
   (:require
    [clojure.test :refer [deftest testing is] :as t]
    [hooray.fixtures :as fix :refer [*conn*]]
-   [hooray.core :as core]
+   [hooray.core :as h]
    [hooray.db :as db]))
 
-(t/use-fixtures :once fix/with-each-db-option* fix/with-chinook-data)
+(t/use-fixtures :once fix/with-each-db-option*)
 (t/use-fixtures :each fix/with-timing-logged)
+
+(deftest empty-db-test
+  (testing "empty db"
+    (is (empty?
+         (h/q '{:find [?a]
+                :where [[:bar :bar ?a]]}
+              (db/db *conn*))))
+
+    (is (empty?
+         (h/q '{:find [?a]
+                :where [[:bar ?a :bar]]}
+              (db/db *conn*))))
+
+    (is (empty?
+         (h/q '{:find [?a]
+                :where [[?a :bar :bar]]}
+              (db/db *conn*))))))
 
 (deftest simple-query-test
   (testing "Simple query"
-    (is (= [["AC/DC"]]
-           (core/q '{:find [?name]
-                     :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
-                             [?t :track/album ?album]
-                             [?album :album/artist ?artist]
-                             [?artist :artist/name ?name]]}
-                   (db/db *conn*))))))
+    (h/transact *conn* [[:db/add :foo :foo :foo] [:db/add :bar :bar :foo]
+                        [:db/add :bar :foo :bar] [:db/add :foo :bar :bar]])
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[:bar :bar ?a]]}
+                (db/db *conn*))))
 
-(deftest simple-multi-result-query
-  (testing "Simple multi-result query"
-    (is (= 32
-           (count (core/q '{:find [?track-name ?album-title]
-                            :where [[?artist :artist/name "Ozzy Osbourne"]
-                                    [?album :album/artist ?artist]
-                                    [?album :album/title ?album-title]
-                                    [?t :track/album ?album]
-                                    [?t :track/name ?track-name]]}
-                          (db/db *conn*)))))))
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[:bar ?a :bar]]}
+                (db/db *conn*))))
+
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[?a :bar :bar]]}
+                (db/db *conn*))))))
+
+
+(deftest unification-query-test
+  (testing "unification"
+    (h/transact *conn* [[:db/add :foo :foo :foo] [:db/add :bar :bar :foo]
+                        [:db/add :bar :foo :bar] [:db/add :foo :bar :bar]])
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[:bar :bar ?a]
+                          [:bar ?a :bar]]}
+                (db/db *conn*))))
+
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[:bar ?a :bar]
+                          [?a :bar :bar]]}
+                (db/db *conn*))))
+
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[?a :bar :bar]
+                          [:bar :bar ?a]]}
+                (db/db *conn*))))))
+
+;; TODO broken on every db so far
+#_
+(deftest pattern-with-same-var-test
+  (testing "same var multiple times in pattern"
+    (h/transact *conn* [[:db/add :foo :foo :foo]
+                        [:db/add :bar :bar :foo]
+                        [:db/add :bar :toto :foo]
+                        [:db/add :bar :foo :bar]
+                        [:db/add :bar :foo :toto]
+                        [:db/add :foo :bar :bar]
+                        [:db/add :foo :bar :toto]])
+    (let [res (h/q '{:find [?a]
+                     :where [[?a ?a :foo]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo] [:bar]} (set res))))
+    (let [res (h/q '{:find [?a]
+                     :where [[?a :foo ?a]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo] [:bar]} (set res))))
+    (let [res (h/q '{:find [?a]
+                     :where [[:foo ?a ?a]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo] [:bar]} (set res))))
+    (is (= [[:foo]]
+           (h/q '{:find [?a]
+                  :where [[?a ?a ?a]]}
+                (db/db *conn*))))))
