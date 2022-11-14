@@ -69,7 +69,7 @@
 
 ;; TODO broken on every db so far
 #_(ns-unmap *ns* 'pattern-with-same-var-test)
-#_
+
 (deftest pattern-with-same-var-test
   (testing "same var multiple times in pattern"
     (h/transact *conn* [[:db/add :foo :foo :foo]
@@ -84,6 +84,11 @@
                    (db/db *conn*))]
       (is (= 2 (count res)))
       (is (= #{[:foo] [:bar]} (set res))))
+    #_(let [res (h/q '{:find [?a ?b]
+                       :where [[?a ?a ?b]]}
+                     (db/db *conn*))]
+        (is (= 2 (count res)))
+        (is (= #{[:foo :foo] [:bar :foo]} (set res))))
     (let [res (h/q '{:find [?a]
                      :where [[?a :foo ?a]]}
                    (db/db *conn*))]

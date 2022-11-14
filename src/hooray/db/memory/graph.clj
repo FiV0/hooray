@@ -99,31 +99,61 @@
 
   )
 
-;; pretty much one to one copied from asami
 ;; TODO optimize for not returning constant columns
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
 
 (defmulti get-from-index (fn [index binding] (simplify binding)))
 
 (defmethod get-from-index '[? ? ?]
-  [{index :eav} _]
-  (for [e (keys index) a (keys (index e)) v ((index e) a)]
-    [e a v]))
+  [{:keys [eav vea ave]} [var1 var2 var3]]
+  ;; (sc.api/spy)
+  (cond (= var1 var2 var3)
+        (for [e (keys eav)
+              :when (get-in eav [e e e])]
+          [e e e])
+
+        (= var1 var2)
+        (for [e (keys eav) v (get-in eav [e e])]
+          [e e v])
+
+        (= var1 var3)
+        (for [v (keys vea) a (get-in vea [v v])]
+          [v a v])
+
+        (= var2 var3)
+        (for [a (keys ave) e (get-in ave [a a])]
+          [e a a])
+
+        :else
+        (for [e (keys eav) a (keys (eav e)) v ((eav e) a)]
+          [e a v])))
 
 (defmethod get-from-index '[? ? :v]
-  [{index :vea} [_ _ v]]
-  (for [e (keys (index v)) a ((index v) e)]
-    [e a]))
+  [{index :vea} [var1 var2 v]]
+  (if (= var1 var2)
+    (for [e (keys (index v))
+          :when (get-in index [v e e])]
+      [e e])
+    (for [e (keys (index v)) a ((index v) e)]
+      [e a])))
 
 (defmethod get-from-index '[? :v ?]
-  [{index :ave} [_ a _]]
-  (for [v (keys (index a)) e ((index a) v)]
-    [e v]))
+  [{index :ave} [var1 a var2]]
+  (if (= var1 var2)
+    (for [v (keys (index a))
+          :when (get-in index [a v v])]
+      [v v])
+    (for [v (keys (index a)) e ((index a) v)]
+      [e v])))
 
 (defmethod get-from-index '[:v ? ?]
-  [{index :eav} [e _ _]]
-  (for [a (keys (index e)) v ((index e) a)]
-    [a v]))
+  [{index :eav} [e var1 var2]]
+  (if (= var1 var2)
+    (for [a (keys (index e))
+          :when (get-in index [e a a])]
+      [a a])
+    (for [a (keys (index e)) v ((index e) a)]
+      [a v])))
 
 (defmethod get-from-index '[? :v :v]
   [{index :ave} [_ a v]]
