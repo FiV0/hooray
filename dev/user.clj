@@ -27,7 +27,7 @@
 (st/instrument)
 
 (comment
-  (repl/set-refresh-dirs (io/file "src") (io/file "dev"))
+  (repl/set-refresh-dirs (io/file "src") (io/file "dev") (io/file "test"))
   (repl/refresh)
   (repl/clear)
 
