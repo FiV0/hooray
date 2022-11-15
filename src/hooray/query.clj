@@ -112,8 +112,8 @@
                :conformed-query conformed-q))))
 
 ;; TODO move this down to the actual namespaces
-(defmulti join (fn [_compiled-q db]
-                 (type (db/graph db))))
+(defn join-dispatch-fn [_compiled-q db] (type (db/graph db)))
+(defmulti join join-dispatch-fn)
 
 (defmethod join :default [_compiled-q db]
   (throw (ex-info "Graph type not known!!!" {:graph-type (type (db/graph db))})))
