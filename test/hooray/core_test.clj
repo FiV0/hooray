@@ -84,21 +84,31 @@
                    (db/db *conn*))]
       (is (= 2 (count res)))
       (is (= #{[:foo] [:bar]} (set res))))
-    #_(let [res (h/q '{:find [?a ?b]
-                       :where [[?a ?a ?b]]}
-                     (db/db *conn*))]
-        (is (= 2 (count res)))
-        (is (= #{[:foo :foo] [:bar :foo]} (set res))))
+    (let [res (h/q '{:find [?a ?b]
+                     :where [[?a ?a ?b]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo :foo] [:bar :foo]} (set res))))
     (let [res (h/q '{:find [?a]
                      :where [[?a :foo ?a]]}
                    (db/db *conn*))]
       (is (= 2 (count res)))
       (is (= #{[:foo] [:bar]} (set res))))
+    (let [res (h/q '{:find [?a ?b]
+                     :where [[?a ?b ?b]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo :foo] [:foo :bar]} (set res))))
     (let [res (h/q '{:find [?a]
                      :where [[:foo ?a ?a]]}
                    (db/db *conn*))]
       (is (= 2 (count res)))
       (is (= #{[:foo] [:bar]} (set res))))
+    (let [res (h/q '{:find [?a ?b]
+                     :where [[?a ?b ?a]]}
+                   (db/db *conn*))]
+      (is (= 2 (count res)))
+      (is (= #{[:foo :foo] [:bar :foo]} (set res))))
     (is (= [[:foo]]
            (h/q '{:find [?a]
                   :where [[?a ?a ?a]]}

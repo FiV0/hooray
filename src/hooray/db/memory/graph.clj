@@ -106,7 +106,6 @@
 
 (defmethod get-from-index '[? ? ?]
   [{:keys [eav vea ave]} [var1 var2 var3]]
-  ;; (sc.api/spy)
   (cond (= var1 var2 var3)
         (for [e (keys eav)
               :when (get-in eav [e e e])]
