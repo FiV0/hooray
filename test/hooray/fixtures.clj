@@ -56,7 +56,7 @@
 (defmacro with-each-db-option [& body]
   `(with-each-db-option* (fn [] ~@body)))
 
-(defn with-timing* [f]
+(defn with-timing [f]
   (let [start-time-ms (System/currentTimeMillis)
         ret (try
               (f)
@@ -66,9 +66,28 @@
     (merge (when (map? ret) ret)
            {:time-taken-ms (- (System/currentTimeMillis) start-time-ms)})))
 
-(defmacro with-timing [& body]
-  `(with-timing* (fn [] ~@body)))
+(defmacro with-timing* [& body]
+  `(with-timing (fn [] ~@body)))
 
 (defn with-timing-logged [f]
-  (let [{:keys [time-taken-ms]} (with-timing* f)]
+  (let [{:keys [time-taken-ms]} (with-timing f)]
     (log/infof "Test took %s" (util/format-time time-taken-ms))))
+
+(defmacro with-timing-logged* [& body]
+  `(let [{:keys [~'time-taken-ms]} (with-timing (fn [] ~@body))]
+     (log/infof "Test took %s" (util/format-time ~'time-taken-ms))))
+
+(defmacro deftest+timing
+  "Just like `cloure.test/deftest` but timed and the first form is ignored.
+
+  (deftest+timing complete-graph-test
+    (h/transact *conn* (g/graph->ops (g/complete-graph 100)))
+    (is (= 161700
+           (count (h/q triangle-query (h/db *conn*))))))"
+  [name setup & body]
+  (when clojure.test/*load-tests*
+    `(def ~(vary-meta name assoc :test
+                      `(fn []
+                         ~setup
+                         (with-timing-logged* ~@body)))
+       (fn [] (clojure.test/test-var (var ~name))))))

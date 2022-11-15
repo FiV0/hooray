@@ -12,7 +12,6 @@
 
 (t/use-fixtures :each fix/with-each-db-option* fix/with-timing-logged)
 
-
 (deftest complete-graph-test
   (testing "triangle query complete graph 100"
     (h/transact *conn* (g/graph->ops (g/complete-graph 100)))
@@ -20,8 +19,8 @@
            (count (h/q triangle-query (h/db *conn*)))))))
 
 (deftest complete-bipartite-test
-  (testing "triangle query bipartite 100"
-    (h/transact *conn* (g/graph->ops (g/complete-bipartite 100)))
+  (testing "triangle query bipartite 200"
+    (h/transact *conn* (g/graph->ops (g/complete-bipartite 200)))
     (is (= 0
            (count (h/q triangle-query (h/db *conn*)))))))
 
