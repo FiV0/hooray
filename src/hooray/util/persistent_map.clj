@@ -2,9 +2,8 @@
   (:refer-clojure :exclude [sorted-map sorted-map-by])
   (:require [me.tonsky.persistent-sorted-set :as set])
   (:import
-   (clojure.lang RT IPersistentMap MapEntry )
-   (me.tonsky.persistent_sorted_set PersistentSortedSet ISeek Seq)
-   (java.util Comparator )))
+   (clojure.lang RT IPersistentMap MapEntry SeqIterator)
+   (me.tonsky.persistent_sorted_set PersistentSortedSet ISeek Seq)))
 
 #_(defprotocol ISeek
     (seek [this k]))
@@ -129,7 +128,12 @@
     (PersistentSortedMap. (disj set [k nil]) _meta))
 
   (assocEx [this k v]
-    (throw (UnsupportedOperationException.))))
+    (throw (UnsupportedOperationException.)))
+
+  Iterable
+  (iterator [this] (SeqIterator. (seq this)))
+  (forEach [this action] (throw (UnsupportedOperationException.)))
+  (spliterator [this] (throw (UnsupportedOperationException.))))
 
 (defn sorted-map
   ([] (PersistentSortedMap. (set/sorted-set-by #(compare (first %1) (first %2))) {}))
@@ -154,4 +158,5 @@
       (seek 1))
 
   (sorted-map [1 (sorted-map [2 3])])
-  (get (sorted-map [1 (sorted-map [2 3])]) 1))
+  (get (sorted-map [1 (sorted-map [2 3])]) 1)
+  (into [] (sorted-map [1 2] [2 3])))
