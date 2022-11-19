@@ -1,7 +1,6 @@
 (ns hooray.algo.generic-join
   (:refer-clojure :exclude [count extend])
-  (:require [clojure.core.match :refer [match]]
-            [clojure.data.avl :as avl]
+  (:require [clojure.data.avl :as avl]
             [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
@@ -152,7 +151,8 @@
           var->extenders
           (reduce (fn [v->e clause]
                     (let [vars (filter util/variable? clause)]
-                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph uri-map)) v->e vars)))
+                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph uri-map))
+                              v->e vars)))
                   {} where)]
       (loop [res '([]) level 0]
         (if (= level (clojure.core/count var-join-order))
