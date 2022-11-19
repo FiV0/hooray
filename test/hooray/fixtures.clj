@@ -42,7 +42,9 @@
                         {:type :mem :sub-type :core} "hooray:mem:core//data"
                         {:type :mem :sub-type :avl} "hooray:mem:avl//data"
                         {:type :mem :sub-type :tonsky} "hooray:mem:tonsky//data"
-                        {:type :mem :sub-type :avl :algo :generic} "hooray:mem:avl:generic//data"})
+                        ;; {:type :mem :sub-type :core :algo :generic} "hooray:mem:core:generic//data"
+                        {:type :mem :sub-type :avl :algo :generic} "hooray:mem:avl:generic//data"
+                        {:type :mem :sub-type :tonsky :algo :generic} "hooray:mem:tonsky:generic//data"})
 
 (def ^:dynamic *db-context* nil)
 
