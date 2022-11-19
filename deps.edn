@@ -26,6 +26,8 @@
   persistent-sorted-set/persistent-sorted-set
   {:git/url "https://github.com/FiV0/persistent-sorted-set.git"
    :git/sha "5481a0fb2b8fbfc439982da94e378b47e63ffcea"}
+  #_{:git/url "https://github.com/tonsky/persistent-sorted-set.git"
+     :git/sha "1fb499171e0d020ee258e759a074d5cf5e6c1c11"}
   #_{:local/root "../persistent-sorted-set/"}
   #_{:mvn/version "0.2.1"}}
 

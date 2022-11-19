@@ -15,8 +15,7 @@
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))
 
 (comment
-  (ns-unmap *ns* 'connect*)
-  )
+  (ns-unmap *ns* 'connect*))
 
 (defmulti connect* (fn [{:keys [type]}] type))
 (defmethod connect* :default [uri-map]

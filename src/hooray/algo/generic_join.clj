@@ -7,7 +7,8 @@
             [hooray.db :as db]
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
-            [hooray.util :as util]))
+            [hooray.util :as util]
+            [hooray.util.persistent-map :as tonsky-map]))
 
 ;; generic-join based on
 ;; http://www.frankmcsherry.org/dataflow/relational/join/2015/04/11/genericjoin.html
@@ -105,11 +106,11 @@
           (-> (update :triple-order conj (idx->name j))
               (update :triple conj j-literal))
 
-          true
+          :always
           (-> (update :triple-order conj (idx->name next-var-idx))
               (update :triple conj next-var)))))))
 
-(defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn]
+(defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn seek-fn]
   PrefixExtender
   (count [_this prefix]
     (clojure.core/count (resolve-tuple-fn graph
@@ -144,7 +145,7 @@
                     (< first-s first-ext)
                     (recur res
                            pos
-                           (avl/seek s first-ext))
+                           (seek-fn s first-ext))
                     (> first-s first-ext)
                     (recur res
                            (binary-search extensions first-s pos)
@@ -152,11 +153,18 @@
             res))
         extensions))))
 
-(defn- ->pattern-prefix-extender [pattern var-join-order graph]
+(defn type->seek-fn [type]
+  (case type
+    :avl avl/seek
+    :tonsky tonsky-map/seek
+    (throw (ex-info "Seek not supported on type!" {:type type}))))
+
+(defn- ->pattern-prefix-extender [pattern var-join-order graph {:keys [sub-type] :as _uri-map}]
   (->PatternPrefixExtender pattern var-join-order graph
                            (memoize graph/resolve-tuple)
                            #_(memoize prefix->tuple)
-                           (memoize (prefix->tuple-fn pattern var-join-order))))
+                           (memoize (prefix->tuple-fn pattern var-join-order))
+                           (type->seek-fn sub-type)))
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
@@ -178,10 +186,11 @@
   {:pre [(vector? var-join-order)]}
   (if-let [where (:where query)]
     (let [graph (db/graph db)
+          uri-map (-> db :opts :uri-map)
           var->extenders
           (reduce (fn [v->e clause]
                     (let [vars (filter util/variable? clause)]
-                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph)) v->e vars)))
+                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph uri-map)) v->e vars)))
                   {} where)]
       (loop [res '([]) level 0]
         (if (= level (clojure.core/count var-join-order))
