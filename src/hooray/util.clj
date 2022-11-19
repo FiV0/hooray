@@ -101,3 +101,16 @@
 
 (defmacro with-timing [& body]
   `(with-timing* (fn [] ~@body)))
+
+(defn select-keys*
+  "Returns a map containing only those entries in map whose key is in keys and non-nil"
+  [map keyseq]
+  (loop [ret {} keys (seq keyseq)]
+    (if keys
+      (let [entry (. clojure.lang.RT (find map (first keys)))]
+        (recur
+         (if (and entry (val entry))
+           (conj ret entry)
+           ret)
+         (next keys)))
+      (with-meta ret (meta map)))))
