@@ -21,37 +21,6 @@
 
 (s/def ::prefix (s/coll-of integer? :kind vector?))
 
-(defn prefix->tuple [prefix pattern var-join-order]
-  {:pre [(< (clojure.core/count prefix) (clojure.core/count var-join-order))
-         (s/valid? ::prefix prefix)]}
-  (let [var->bindings (zipmap var-join-order (range))
-        size (clojure.core/count prefix)
-        next-var (nth var-join-order size)]
-    (match (mapv (fn [v] (cond (and (util/variable? v) (< (var->bindings v) size))
-                               [(nth prefix (var->bindings v)) true]
-
-                               (util/constant? v)
-                               [(g-index/hash v) true]
-
-                               :else
-                               [v false])) pattern)
-      [[next-var _] [a true] [v true]] {:triple [a v next-var] :triple-order [:a :v :e]}
-      [[next-var _] [_ false] [v true]] {:triple [v next-var] :triple-order [:v :e]}
-      [[next-var _] [a true] [_ false]] {:triple [a next-var] :triple-order [:a :e]}
-      [[next-var _] [_ false] [_ false]] {:triple [next-var] :triple-order [:e]}
-      [[e true] [next-var _] [v true]] {:triple [e v next-var] :triple-order [:e :v :a]}
-      [[_ false] [next-var _] [v true]] {:triple [v next-var] :triple-order [:v :a]}
-      [[e true] [next-var _] [_ false]] {:triple [e next-var] :triple-order [:e :a]}
-      [[_ false] [next-var _] [_ false]] {:triple [next-var] :triple-order [:a]}
-      [[e true] [a true] [next-var _]] {:triple [e a next-var] :triple-order [:e :a :v]}
-      [[_ false] [a true] [next-var _]] {:triple [a next-var] :triple-order [:a :v]}
-      [[e true] [_ false] [next-var _]] {:triple [e next-var] :triple-order [:e :v]}
-      [[_ false] [_ false] [next-var _]] {:triple [next-var] :triple-order [:v]}
-      :else (throw (ex-info "prefix->tuple bad pattern!" {:pattern pattern})))))
-
-(comment
-  (prefix->tuple [1 2] '[?e :foo ?v] '[?e ?bla ?v]))
-
 ;; TOOO to adapt if remove doc-store for in-memory db
 (defn- binary-search
   ([extensions k] (binary-search extensions k 0))
@@ -113,14 +82,10 @@
 (defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn seek-fn]
   PrefixExtender
   (count [_this prefix]
-    (clojure.core/count (resolve-tuple-fn graph
-                                          #_(prefix->tuple-fn prefix pattern var-join-order)
-                                          (prefix->tuple-fn prefix))))
+    (clojure.core/count (resolve-tuple-fn graph (prefix->tuple-fn prefix))))
 
   (propose [_this prefix]
-    (let [index (resolve-tuple-fn graph
-                                  #_(prefix->tuple-fn prefix pattern var-join-order)
-                                  (prefix->tuple-fn prefix))]
+    (let [index (resolve-tuple-fn graph (prefix->tuple-fn prefix))]
       (cond
         (set? index) (into [] (seq index))
         (map? index) (into [] (keys index))
@@ -128,9 +93,7 @@
         :else (throw (ex-info "No propose op for this index type!" {:index-type (type index)})))))
 
   (intersect [_this prefix extensions]
-    (let [index (resolve-tuple-fn graph
-                                  #_(prefix->tuple-fn prefix pattern var-join-order)
-                                  (prefix->tuple-fn prefix))
+    (let [index (resolve-tuple-fn graph (prefix->tuple-fn prefix))
           first-index (if (set? index) first ffirst)
           nb-exts (clojure.core/count extensions)]
       (if (seq extensions)
@@ -162,7 +125,6 @@
 (defn- ->pattern-prefix-extender [pattern var-join-order graph {:keys [sub-type] :as _uri-map}]
   (->PatternPrefixExtender pattern var-join-order graph
                            (memoize graph/resolve-tuple)
-                           #_(memoize prefix->tuple)
                            (memoize (prefix->tuple-fn pattern var-join-order))
                            (type->seek-fn sub-type)))
 
