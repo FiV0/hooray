@@ -28,3 +28,28 @@
                [?artist :artist/name ?name]]}
      (h/db conn))
 ;; => (["AC/DC" "For Those About To Rock We Salute You"])
+
+;; triangle query examples
+
+(require '[hooray.graph-gen :as graph-gen])
+
+;; generate a random graph with 300 nodes and edge probability 0.3 as an edge list
+(def random-graph (graph-gen/random-graph 300 0.3))
+
+;; using standard clojure maps and hash join
+(def conn-hash-join (h/connect "hooray:mem://data"))
+;; using avl maps with a generic WCOJ
+(def conn-avl-generic-join  (h/connect "hooray:mem:avl:generic//data"))
+
+(h/transact conn-hash-join (graph-gen/graph->ops random-graph))
+(h/transact conn-avl-generic-join (graph-gen/graph->ops random-graph))
+
+(def triangle-query '{:find [?a ?b ?c]
+                      :where [[?a :g/to ?b]
+                              [?a :g/to ?c]
+                              [?b :g/to ?c]]})
+
+(time (count (h/q triangle-query (h/db conn-hash-join))))
+;; "Elapsed time: 2835.54778 msecs"
+(time (count (h/q triangle-query (h/db conn-avl-generic-join))))
+;; "Elapsed time: 717.257827 msecs"
