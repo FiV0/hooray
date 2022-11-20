@@ -297,19 +297,12 @@
                      :triple-order [:a :v]})
 
   (get-from-index g {:triple ['?e]
-                     :triple-order [:e]})
-
-
-  (require 'hooray.db.memory.graph-index :reload)
-
-  )
+                     :triple-order [:e]}))
 
 (defmulti get-index (fn [graph {:keys [triple] :as _tuple}] (simplify triple)))
 
 (defmethod get-index :default [_ tuple]
   (throw (ex-info "No method found for tuple!" {:tuple tuple})))
-
-(defn triple-order->index [[t1 t2 t3]])
 
 (defmethod get-index '[? ? ?]
   [graph {[t1 t2 t3] :triple-order :as _tuple}]
