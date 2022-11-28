@@ -372,11 +372,15 @@
   (seek [this k])
   (at-end? [this]))
 
+(s/def :leap/iterator #(satisfies? LeapIterator %))
+
 (defprotocol LeapLevels
   (open [this])
   (up [this])
   (level [this])
   (depth [this]))
+
+(s/def :leap/levels #(satisfies? LeapLevels %))
 
 (defn leap-iterator? [itr]
   (and (satisfies? LeapIterator itr) (satisfies? LeapLevels itr)))
@@ -610,9 +614,9 @@
                       :v [:literal "For Those About To Rock (We Salute You)"]},
                      :triple-order [:a :v :e]}))
 
-(defn get-iterator* [graph {:keys [_triple _triple-order] :as tuple} type]
+(defn get-iterator* [graph {:keys [triple _triple-order] :as tuple} type]
   #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (let [{:keys [triple] :as tuple} (unconform-tuple tuple)
+  (let [#_#_{:keys [triple] :as tuple} (unconform-tuple tuple)
         nb-vars (count (filter util/variable? triple))]
     (case type
       :simple (->simple-iterator (get-from-index graph tuple))
