@@ -45,7 +45,7 @@
     (= (nth pattern 0) var) 0
     (= (nth pattern 1) var) 1
     (= (nth pattern 2) var) 2
-    :else (throw (ex-info "Var not in pattern!" {:var var :pattern var}))))
+    :else (throw (ex-info "Var not in pattern!" {:var var :pattern pattern}))))
 
 (def idx->name {0 :e 1 :a 2 :v})
 

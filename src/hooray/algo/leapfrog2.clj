@@ -46,7 +46,7 @@
     (= (nth pattern 0) var) 0
     (= (nth pattern 1) var) 1
     (= (nth pattern 2) var) 2
-    :else (throw (ex-info "Var not in pattern!" {:var var :pattern var}))))
+    :else (throw (ex-info "Var not in pattern!" {:var var :pattern pattern}))))
 
 (def idx->name {0 :e 1 :a 2 :v})
 
@@ -58,7 +58,7 @@
 
 (defn partial->tuple-fn [pattern var-join-order var->bindings]
   (fn partial-row->tuple [partial-row]
-    (let [size (clojure.core/count partial-row)
+    (let [size (count partial-row)
           next-var (nth var-join-order size)
           next-var-idx (next-var-index pattern next-var)
           [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
@@ -84,7 +84,7 @@
    (reduce (fn [mapping [clause tuple-fn]]
              (reduce #(update %1 %2 (fnil conj []) tuple-fn) mapping clause)) {})))
 
-(s/def ::vars->tuple-fns (s/map-of util/variable? fn?))
+(s/def ::vars->tuple-fns (s/map-of util/variable? (s/and vector? (s/* fn?))))
 
 (comment
   (let [var-join-order '[?genre ?t ?name]
@@ -118,9 +118,9 @@
                                     :vars->tuple-fns ::vars->tuple-fns
                                     :graph #(satisfies? graph/GraphIndex %)))
 
-(defn var->iterators [var partial-row vars->tuple-fns graph]
+(defn var->iterators [var partial-row vars->tuple-fns2 graph]
   (let [graph-type (-> graph :opts :type)]
-    (->> (vars->tuple-fns var)
+    (->> (vars->tuple-fns2 var)
          (map (fn [partial-row->tuple-fn]
                 (graph/get-iterator graph (partial-row->tuple-fn partial-row) graph-type)))
          ->iterators)))
@@ -137,7 +137,7 @@
           [nil (->Iterators itrs p)]
 
           (= x' x)
-          [x (->Iterators (iterator-next itrs p) (inc p))]
+          [x (->Iterators (iterator-next itrs p) (mod (inc p) k))]
 
           :else
           (let [itrs (iterator-seek itrs p x')]
@@ -156,13 +156,14 @@
           iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out
-          (recur (cons res partial-row) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))
+          (recur (cons partial-row res) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))
 
           (let [[val new-iterators] (leapfrog-next iterators)]
             (cond (not (nil? val))
-                  (let [partial-row (conj partial-row val)]
-                    (recur res (conj partial-row val) (inc var-level)
-                           (var->iterators (nth var-join-order (inc var-level)) partial-row vars->tuple-fns graph)
+                  (let [partial-row (conj partial-row val)
+                        var-level (inc var-level)]
+                    (recur res partial-row var-level
+                           (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph)
                            (conj iterator-stack new-iterators)))
 
                   ;; finished
@@ -173,7 +174,6 @@
                   :else
                   (recur res (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack)))))))
     (throw (ex-info "Query must contain where clause!" {:query query}))))
-
 
 (comment
   (require '[clojure.spec.test.alpha :as st])
@@ -213,26 +213,4 @@
 
   (do
     (def compiled-q  (query/compile-query q (get-db)))
-    (join compiled-q (get-db)))
-
-  (time (join compiled-q (get-db)))
-  (time (join compiled-q (get-avl-db)))
-
-  (def tupels
-    (->> (-> compiled-q :query :where)
-         (filter (comp #{:triple} first))
-         (mapv (comp #(triple->tuple % (:var->bindings compiled-q)) second))))
-
-  (defn get-iterator [tuple]
-    (graph/get-iterator (db/graph (get-db)) tuple))
-
-
-  (def it (get-iterator (first tupels) ))
-  (get-iterator (second tupels) )
-  (get-iterator (nth tupels 2) )
-  (get-iterator (nth tupels 3) )
-
-  (-> it g-index/key )
-  (-> it g-index/at-end? )
-  (-> it g-index/next g-index/at-end?)
-  )
+    (join compiled-q (get-db))))

@@ -441,9 +441,12 @@
   (->simple-iterator (get-from-index graph tuple)))
 
 (defn- first-key [index depth max-depth]
-  (if (= (inc depth) max-depth)
-    (first index)
-    (ffirst index)))
+  #_(if (= (inc depth) max-depth)
+      (first index)
+      (ffirst index))
+  (let [val (first index)]
+    (cond-> val
+      (vector? val) first)))
 
 (defn- seek-key [index k depth max-depth]
   (let [key-fn (if (= depth max-depth) identity first)]
