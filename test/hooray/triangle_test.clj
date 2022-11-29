@@ -25,8 +25,8 @@
            (count (h/q triangle-query (h/db *conn*)))))))
 
 (deftest star-graph-test
-  (testing "triangle query star graph 10000"
-    (h/transact *conn* (g/graph->ops (g/star-graph 10000)))
+  (testing "triangle query star graph 1000"
+    (h/transact *conn* (g/graph->ops (g/star-graph 1000)))
     (is (= 0
            (count (h/q triangle-query (h/db *conn*)))))))
 
