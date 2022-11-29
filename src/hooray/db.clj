@@ -7,11 +7,14 @@
     [:mem nil nil] true
     [:mem :core nil] true
     [:mem :core :leapfrog] true
+    [:mem :core :leapfrog2] true
     [:mem :avl nil] true
     [:mem :avl :leapfrog] true
+    [:mem :avl :leapfrog2] true
     [:mem :avl :generic] true
     [:mem :tonsky nil] true
     [:mem :tonsky :leapfrog] true
+    [:mem :tonsky :leapfrog2] true
     [:mem :tonsky :generic] true
     :else false))
 

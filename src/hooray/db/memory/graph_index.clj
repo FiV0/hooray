@@ -619,7 +619,8 @@
 
 (defn get-iterator* [graph {:keys [triple _triple-order] :as tuple} type]
   #_{:pre [(s/assert ::tuple tuple) (iterator-types type)]}
-  (let [#_#_{:keys [triple] :as tuple} (unconform-tuple tuple)
+  (let [{:keys [triple] :as tuple} (cond-> tuple
+                                     (map? triple) unconform-tuple)
         nb-vars (count (filter util/variable? triple))]
     (case type
       :simple (->simple-iterator (get-from-index graph tuple))
