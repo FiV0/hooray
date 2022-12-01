@@ -56,11 +56,9 @@
         (nth partial-row (var->bindings var?))
         :else nil))
 
-(defn partial->tuple-fn [pattern var-join-order var->bindings]
-  (fn partial-row->tuple [partial-row]
-    (let [size (count partial-row)
-          next-var (nth var-join-order size)
-          next-var-idx (next-var-index pattern next-var)
+(defn partial->tuple-fn [pattern var->bindings]
+  (fn partial-row->tuple [partial-row next-var]
+    (let [next-var-idx (next-var-index pattern next-var)
           [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
           i-literal (pos->literal (nth pattern i) var->bindings partial-row)
           j-literal (pos->literal (nth pattern j) var->bindings partial-row)]
@@ -78,9 +76,9 @@
         (-> (update :triple-order conj (idx->name next-var-idx))
             (update :triple conj next-var))))))
 
-(defn vars->tuple-fns [where var-join-order var->bindings]
+(defn vars->tuple-fns [where var->bindings]
   (->>
-   (map #(vector (filter util/variable? %) (partial->tuple-fn % var-join-order var->bindings)) where)
+   (map #(vector (filter util/variable? %) (partial->tuple-fn % var->bindings)) where)
    (reduce (fn [mapping [clause tuple-fn]]
              (reduce #(update %1 %2 (fnil conj []) tuple-fn) mapping clause)) {})))
 
@@ -118,11 +116,11 @@
                                     :vars->tuple-fns ::vars->tuple-fns
                                     :graph #(satisfies? graph/GraphIndex %)))
 
-(defn var->iterators [var partial-row vars->tuple-fns2 graph]
+(defn var->iterators [var partial-row vars->tuple-fns graph]
   (let [graph-type (-> graph :opts :type)]
-    (->> (vars->tuple-fns2 var)
+    (->> (vars->tuple-fns var)
          (map (fn [partial-row->tuple-fn]
-                (graph/get-iterator graph (partial-row->tuple-fn partial-row) graph-type)))
+                (graph/get-iterator graph (partial-row->tuple-fn partial-row var) graph-type)))
          ->iterators)))
 
 (s/fdef leapfrog-next :args (s/cat :iterators ::iterators))
@@ -152,7 +150,7 @@
           ;; dummy var to bottom out
           var-join-order (conj var-join-order (gensym "?dummy"))
           graph (db/graph db)
-          vars->tuple-fns (vars->tuple-fns where var-join-order var->bindings)
+          vars->tuple-fns (vars->tuple-fns where var->bindings)
           iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out
