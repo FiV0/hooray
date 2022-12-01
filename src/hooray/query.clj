@@ -3,7 +3,6 @@
             [hooray.algo.generic-join :as gj]
             [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
-            [hooray.algo.leapfrog2 :as lf2]
             [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.memory.graph]
@@ -126,7 +125,6 @@
   (let [algo (-> opts :uri-map :algo)]
     (case algo
       (nil :leapfrog) (lf/join compiled-q db)
-      :leapfrog2 (lf2/join compiled-q db)
       :generic (gj/join compiled-q db)
       (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
