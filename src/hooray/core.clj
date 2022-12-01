@@ -1,5 +1,6 @@
 (ns hooray.core
-  (:require [hooray.db :as db]
+  (:require [clojure.tools.logging :as log]
+            [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.persistent]
             [hooray.query :as query])
@@ -13,6 +14,8 @@
 
 (defn q [query & inputs]
   {:pre [(>= (count inputs) 1)]}
+  (when (> (count inputs) 1)
+    (log/warn "Hooray currently only supports one source!"))
   (query/query query (first inputs)))
 
 (defn db [conn]

@@ -24,8 +24,7 @@
   (transact
     [this tx-data]
     [this tx-data ts]
-    "Bulk operation to add and remove multiple statements in a single operation")
-  )
+    "Bulk operation to add and remove multiple statements in a single operation"))
 
 (defprotocol GraphIndex
   (resolve-tuple [this tuple])

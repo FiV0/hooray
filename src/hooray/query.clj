@@ -1,34 +1,16 @@
 (ns hooray.query
-  (:require [clojure.string :as str]
-            [hooray.algo.generic-join :as gj]
+  (:require [hooray.algo.generic-join :as gj]
             [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
             [hooray.db :as db]
             [hooray.db.memory]
             [hooray.db.memory.graph]
             [hooray.db.memory.graph-index]
-            [hooray.graph :as graph]
+            [hooray.graph]
             [hooray.query.spec :as hooray-spec]
-            [hooray.util :as util]
-            [medley.core :refer [map-kv]])
+            [hooray.util :as util])
   (:import (hooray.db.memory.graph MemoryGraph)
            (hooray.db.memory.graph_index MemoryGraphIndexed)))
-
-(defn- unique-variables? [clause]
-  (let [variables (filter util/variable? clause)]
-    (= variables (distinct variables))))
-
-(defn make-wildcards-unique [clause]
-  (mapv #(if (util/wildcard? %) (gensym "wildcard_") %) clause))
-
-(defn cleanup-where [clauses]
-  (let [res (mapv make-wildcards-unique clauses)]
-    (loop [clauses res]
-      (if-let [clause (first clauses)]
-        (if (unique-variables? clause)
-          (recur (rest clauses))
-          (throw (ex-info "Where-clause needs distinct variables!" {:clause clause})))
-        res))))
 
 (defn- ->return-maps [{:keys [keys syms strs]}]
   (let [ks (or (some->> keys (mapv keyword))
@@ -36,32 +18,6 @@
                (some->> strs (mapv str)))]
     (fn [row]
       (zipmap ks row))))
-
-(defn logic-var? [v]
-  (and (simple-symbol? v)
-       (comp #(str/starts-with? % "?") name)))
-
-(defn wildcard? [v] (= v '_))
-
-(defn literal? [v]
-  (not (or (wildcard? v) (logic-var? v)))
-  #_(complement logic-var?))
-
-(defn- vars-from-triple [{:keys [e a v]}]
-  (->> [e a v]
-       (filter (comp #{:logic-var} first))
-       (map second)))
-
-(defn var-join-order [{:keys [where] :as _q} _db]
-  (->> where
-       (filter (comp #{:triple} first))
-       (mapcat (comp vars-from-triple second))
-       dedupe))
-
-(defn query-plan [q db]
-  (let [var-join-order (var-join-order q db)]
-    {:var-join-order var-join-order
-     :var->bindings (zipmap var-join-order (range))}))
 
 (comment
   (def conformed-q (hooray-spec/conform-query '{:find [?name]
@@ -71,8 +27,7 @@
                                                  [?album :album/artist ?artist]
                                                  [?artist :artist/name ]
                                                  [_ :foo/bar]]
-                                                :limit 12}))
-  (query-plan conformed-q nil))
+                                                :limit 12})))
 
 (defn order-by-bindings [v var->bindings]
   (sort-by var->bindings v))
@@ -82,30 +37,30 @@
     (if (seq find)
       (fn find-projection [row]
         (mapv (fn [v]
-                (if (logic-var? v)
+                (if (util/variable? v)
                   (nth row (get var->bindings v))
                   v))
               find))
       (throw (ex-info "`find` can't be empty!" {:query query})))))
 
-(defn var-join-order2 [{:keys [where]} _db]
+(defn var-join-order [{:keys [where]} _db]
   (->> (mapcat identity where)
-       (filter logic-var?)
+       (filter util/variable?)
        distinct
        vec))
 
-(defn query-plan2 [q db]
-  (let [var-join-order (var-join-order2 q db)]
+(defn query-plan [q db]
+  (let [var-join-order (var-join-order q db)]
     {:var-join-order var-join-order
      :var->bindings (zipmap var-join-order (range))}))
 
 (defn- replace-wildcards [{:keys [where] :as q}]
-  (->> (mapv #(mapv (fn [v] (if (wildcard? v) (symbol (str "?" (gensym))) v)) %) where)
+  (->> (mapv #(mapv (fn [v] (if (util/wildcard? v) (symbol (str "?" (gensym))) v)) %) where)
        (assoc q :where )))
 
 (defn compile-query [q db]
   (let [q (replace-wildcards q)
-        q-plan (query-plan2 q db)
+        q-plan (query-plan q db)
         conformed-q  (hooray-spec/conform-query q)]
     (-> q-plan
         (assoc :query q
