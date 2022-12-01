@@ -95,3 +95,7 @@
                          ~setup
                          (with-timing-logged* ~@body)))
        (fn [] (clojure.test/test-var (var ~name))))))
+
+(defn with-println [f]
+  (f)
+  (println))
