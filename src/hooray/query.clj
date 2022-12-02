@@ -58,10 +58,13 @@
   (->> (mapv #(mapv (fn [v] (if (util/wildcard? v) (symbol (str "?" (gensym))) v)) %) where)
        (assoc q :where )))
 
+(defn unique-variable-db? [db]
+  (instance? MemoryGraphIndexed (db/graph db)))
+
 (defn compile-query [q db]
   (let [q (replace-wildcards q)
         q-plan (query-plan q db)
-        conformed-q  (hooray-spec/conform-query q)]
+        conformed-q  (hooray-spec/conform-query q {:unique? (unique-variable-db? db)})]
     (-> q-plan
         (assoc :query q
                :conformed-query conformed-q))))
