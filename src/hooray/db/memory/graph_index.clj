@@ -440,16 +440,13 @@
 (defn tuple->simple-iterator [graph tuple]
   (->simple-iterator (get-from-index graph tuple)))
 
-(defn- first-key [index depth max-depth]
-  #_(if (= (inc depth) max-depth)
-      (first index)
-      (ffirst index))
+(defn- first-key [index]
   (let [val (first index)]
     (cond-> val
       (vector? val) first)))
 
-(defn- seek-key [index k depth max-depth]
-  (let [key-fn (if (= depth max-depth) identity first)]
+(defn- seek-key [index k]
+  (let [key-fn (if (vector? (first index)) first identity)]
     (loop [l 0 h (dec (count index))]
       (if (= l h)
         (if (<= k (key-fn (nth index l)))
@@ -466,9 +463,11 @@
   (seek-key [1] 13 0 0)
   (seek-key [0 1] 1 0 0))
 
+;; TODO integrate first-key/key-fn into iterators, maybe remove levels
+
 (defrecord LeapIteratorCore [index stack depth max-depth]
   LeapIterator
-  (key [this] (first-key index depth max-depth))
+  (key [this] (first-key index))
 
   (next [this]
     (if-not (at-end? this)
@@ -477,7 +476,7 @@
 
   (seek [this k]
     (when (seq index)
-      (with-meta (->LeapIteratorCore (seek-key index k (inc depth) max-depth) stack depth max-depth)
+      (with-meta (->LeapIteratorCore (seek-key index k) stack depth max-depth)
         (meta this))))
 
   (at-end? [this] (empty? index))
@@ -507,7 +506,7 @@
 
 (defrecord LeapIteratorAVL [index stack depth max-depth]
   LeapIterator
-  (key [this] (first-key index depth max-depth))
+  (key [this] (first-key index))
 
   (next [this]
     (with-meta (->LeapIteratorAVL (clojure.core/next index) stack depth max-depth)
@@ -551,7 +550,7 @@
 
 (defrecord LeapIteratorTonsky [index stack depth max-depth]
   LeapIterator
-  (key [this] (first-key index depth max-depth))
+  (key [this] (first-key index))
 
   (next [this]
     (with-meta (->LeapIteratorTonsky (clojure.core/next index) stack depth max-depth)
