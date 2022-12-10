@@ -16,7 +16,7 @@
 (defonce my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
 (def     my-conn-spec-1 {:uri "redis://localhost:6379/"})
 
-(def my-wcar-opts
+(def wcar-opts
   {:pool my-conn-pool
    :spec my-conn-spec-1})
 
@@ -27,20 +27,20 @@
   (= "PONG" (wcar conn (car/ping))))
 
 ;; TODO replace :store with something like configurable :eav
-(defn set-k [conn k]
-  (wcar conn (car/zadd :store 0 (car/raw k))))
+(defn set-k [conn keyspace k]
+  (wcar conn (car/zadd keyspace 0 (car/raw k))))
 
-(defn set-ks [conn ks]
-  (wcar conn (apply car/zadd :store (mapcat #(vector 0 (car/raw %)) ks))))
+(defn set-ks [conn keyspace ks]
+  (wcar conn (apply car/zadd keyspace (mapcat #(vector 0 (car/raw %)) ks))))
 
-(defn delete-k [conn k]
-  (wcar conn (car/zrem :store 0 (car/raw k))))
+(defn delete-k [conn keyspace k]
+  (wcar conn (car/zrem keyspace 0 (car/raw k))))
 
-(defn delete-ks [conn ks]
-  (wcar conn (apply car/zrem :store (map #(vector 0 (car/raw %)) ks))))
+(defn delete-ks [conn keyspace ks]
+  (wcar conn (apply car/zrem keyspace (map #(vector 0 (car/raw %)) ks))))
 
-(defn get-k [conn k]
-  (when (wcar conn (car/zscore :store (car/raw k))) k))
+(defn get-k [conn keyspace k]
+  (when (wcar conn (car/zscore keyspace (car/raw k))) k))
 
 (def ^:private inclusive-byte (int \[))
 (def ^:private exclusive-byte (int \())
@@ -52,57 +52,62 @@
   (byte-array (mapcat seq [(byte-array [exclusive-byte]) k])))
 
 (defn get-range
-  ([conn start-k stop-k]
+  ([conn keyspace start-k stop-k]
    (wcar conn
          (->
-          (car/zrangebylex :store (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k)))
+          (car/zrangebylex keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k)))
           car/parse-raw)))
-  ([conn start-k stop-k limit]
+  ([conn keyspace start-k stop-k limit]
    (wcar conn
          (->
-          (car/zrangebylex :store (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))
+          (car/zrangebylex keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))
                            :limit 0 limit)
           car/parse-raw))))
 
 (defn seek
-  ([conn prefix-k]
+  ([conn keyspace prefix-k]
    (wcar conn
-         (-> (car/zrange :store (car/raw (inclusive-key prefix-k)) "+" "BYLEX")
+         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) "+" "BYLEX")
              car/parse-raw)))
-  ([conn prefix-k limit]
+  ([conn keyspace prefix-k limit]
    (wcar conn
-         (-> (car/zrange :store (car/raw (inclusive-key prefix-k)) "+" "BYLEX"
+         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) "+" "BYLEX"
                          :limit 0 limit)
              car/parse-raw))))
 
 (defn count-ks
-  ([conn] (wcar conn (car/zcard :store)))
-  ([conn prefix-k] (wcar conn (car/zlexcount :store (car/raw (inclusive-key prefix-k)) "+")))
-  ([conn start-k stop-k]
-   (wcar conn (car/zlexcount :store (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
+  ([conn keyspace] (wcar conn (car/zcard keyspace)))
+  ([conn keyspace prefix-k] (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key prefix-k)) "+")))
+  ([conn keyspace start-k stop-k]
+   (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
 
 (defn clear-set
   "WARNING! This clears the entire keyspace."
   [conn keyspace]
   (wcar conn (car/del keyspace)))
 
+;; TODO handle return value
+(defn clear-db
+  "WARNING! This clears the entire db."
+  [conn]
+  (wcar conn (car/flushdb)))
 
 (comment
-  (set-k my-wcar-opts (->buffer "foo"))
-  (->value (get-k my-wcar-opts (->buffer "foo")))
-  (get-k my-wcar-opts (->buffer "randomshit"))
-  (delete-k my-wcar-opts (->buffer "foo"))
+  (set-k wcar-opts :store (->buffer "foo"))
+  (->value (get-k wcar-opts :store (->buffer "foo")))
+  (get-k wcar-opts :store (->buffer "random"))
+  (delete-k wcar-opts :store (->buffer "foo"))
 
   (->> (for [i (range 10)]
          (str "foo" i))
        (map ->buffer)
-       (set-ks my-wcar-opts))
+       (set-ks wcar-opts :store))
 
-  (clear-set my-wcar-opts :store)
-
+  (clear-set wcar-opts :store)
+  (clear-db wcar-opts)
 
   ;; fix inclusive/exclusive
-  (->> (get-range my-wcar-opts (->buffer "foo") (->buffer "foo2"))
+  (->> (get-range wcar-opts (->buffer "foo") (->buffer "foo2"))
        (map ->value))
 
   (->> (get-range my-wcar-opts (->buffer "foo") (->buffer "foo9") 5)
