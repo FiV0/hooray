@@ -11,8 +11,15 @@
   spootnik/unilog                     {:mvn/version "0.7.30"}
 
   ;; storage options
+  ;; redis
   com.taoensso/carmine                {:mvn/version "3.2.0"}
   com.taoensso/nippy                  {:mvn/version "3.2.0"}
+  ;; foundationdb
+  org.foundationdb/fdb-java           {:mvn/version "6.3.23"}
+  me.vedang/clj-fdb
+  #_{:local/root "../clj_fdb"}
+  {:mvn/version "0.3.0"}
+
 
   ;; in flux
   com.dean/interval-tree
