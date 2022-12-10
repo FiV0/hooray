@@ -1,5 +1,6 @@
 (ns hooray.db.persistent.redis
-  (:require [taoensso.carmine :as car :refer [wcar]]
+  (:require [clojure.string :as str]
+            [taoensso.carmine :as car :refer [wcar]]
             [taoensso.nippy :as nippy]))
 
 ;; API an persistent key/value store should support
@@ -23,8 +24,6 @@
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
-(defn alive? [conn]
-  (= "PONG" (wcar conn (car/ping))))
 
 ;; TODO replace :store with something like configurable :eav
 (defn set-k [conn keyspace k]
@@ -81,6 +80,8 @@
   ([conn keyspace start-k stop-k]
    (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
 
+;; ADMIN
+
 (defn clear-set
   "WARNING! This clears the entire keyspace."
   [conn keyspace]
@@ -91,6 +92,9 @@
   "WARNING! This clears the entire db."
   [conn]
   (wcar conn (car/flushdb)))
+
+(defn alive? [conn]
+  (= "PONG" (wcar conn (car/ping))))
 
 (comment
   (set-k wcar-opts :store (->buffer "foo"))
@@ -107,20 +111,38 @@
   (clear-db wcar-opts)
 
   ;; fix inclusive/exclusive
-  (->> (get-range wcar-opts (->buffer "foo") (->buffer "foo2"))
+  (->> (get-range wcar-opts :store (->buffer "foo") (->buffer "foo2"))
        (map ->value))
 
-  (->> (get-range my-wcar-opts (->buffer "foo") (->buffer "foo9") 5)
+  (->> (get-range wcar-opts :store (->buffer "foo") (->buffer "foo9") 5)
        (map ->value))
 
-  (->> (seek my-wcar-opts (->buffer "foo"))
+  (->> (seek wcar-opts :store (->buffer "foo"))
        (map #(try (->value %) (catch Exception e :some-error))))
 
-  (->> (seek my-wcar-opts (->buffer "foo") 5)
+  (->> (seek wcar-opts :store (->buffer "foo") 5)
        (map #(try (->value %) (catch Exception e :some-error))))
 
-  (->> (count-ks my-wcar-opts))
-  (->> (count-ks my-wcar-opts (->buffer "foo0")))
-  (->> (count-ks my-wcar-opts (->buffer "foo") (->buffer "foo4")))
+  (->> (count-ks wcar-opts :store))
+  (->> (count-ks wcar-opts :store (->buffer "foo2")))
+  (->> (count-ks wcar-opts :store (->buffer "foo") (->buffer "foo4")))
 
-  (alive? my-wcar-opts))
+  (alive? wcar-opts))
+
+;; INFO parsing
+
+(defn- parse-kv [kv]
+  (let [[k v] (str/split kv #":")]
+    [(keyword k) v]))
+
+(defn- parse-section [section]
+  (let [[section-name & values] (str/split-lines section)]
+    [(keyword (str/lower-case section-name)) (into {} (map parse-kv) values)]))
+
+(defn info [conn]
+  (let [sections  (-> (wcar conn (car/info)) (str/split #"#"))
+        sections (->> sections (remove str/blank?) (map str/trim))]
+    (into {} (map parse-section) sections)))
+
+(comment
+  (info wcar-opts))
