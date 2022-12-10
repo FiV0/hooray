@@ -23,6 +23,9 @@
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
+(defn alive? [conn]
+  (= "PONG" (wcar conn (car/ping))))
+
 ;; TODO replace :store with something like configurable :eav
 (defn set-k [conn k]
   (wcar conn (car/zadd :store 0 (car/raw k))))
@@ -39,18 +42,14 @@
 (defn get-k [conn k]
   (when (wcar conn (car/zscore :store (car/raw k))) k))
 
-(comment
-  (int \()
-  ;; => 40
-  (int \[)
-  ;; => 91
-  )
+(def ^:private inclusive-byte (int \[))
+(def ^:private exclusive-byte (int \())
 
 (defn- inclusive-key [k]
-  (byte-array (mapcat seq [(byte-array [91]) k])))
+  (byte-array (mapcat seq [(byte-array [inclusive-byte]) k])))
 
 (defn- exclusive-key [k]
-  (byte-array (mapcat seq [(byte-array [40]) k])))
+  (byte-array (mapcat seq [(byte-array [exclusive-byte]) k])))
 
 (defn get-range
   ([conn start-k stop-k]
@@ -76,6 +75,17 @@
                          :limit 0 limit)
              car/parse-raw))))
 
+(defn count-ks
+  ([conn] (wcar conn (car/zcard :store)))
+  ([conn prefix-k] (wcar conn (car/zlexcount :store (car/raw (inclusive-key prefix-k)) "+")))
+  ([conn start-k stop-k]
+   (wcar conn (car/zlexcount :store (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
+
+(defn clear-set
+  "WARNING! This clears the entire keyspace."
+  [conn keyspace]
+  (wcar conn (car/del keyspace)))
+
 
 (comment
   (set-k my-wcar-opts (->buffer "foo"))
@@ -88,6 +98,9 @@
        (map ->buffer)
        (set-ks my-wcar-opts))
 
+  (clear-set my-wcar-opts :store)
+
+
   ;; fix inclusive/exclusive
   (->> (get-range my-wcar-opts (->buffer "foo") (->buffer "foo2"))
        (map ->value))
@@ -95,29 +108,14 @@
   (->> (get-range my-wcar-opts (->buffer "foo") (->buffer "foo9") 5)
        (map ->value))
 
-
   (->> (seek my-wcar-opts (->buffer "foo"))
        (map #(try (->value %) (catch Exception e :some-error))))
 
   (->> (seek my-wcar-opts (->buffer "foo") 5)
        (map #(try (->value %) (catch Exception e :some-error))))
 
-  (wcar my-wcar-opts (car/ping))
-  (wcar my-wcar-opts (car/zscore :store "dsafadfsa"))
+  (->> (count-ks my-wcar-opts))
+  (->> (count-ks my-wcar-opts (->buffer "foo0")))
+  (->> (count-ks my-wcar-opts (->buffer "foo") (->buffer "foo4")))
 
-  (wcar my-wcar-opts (car/zadd :store 0 "foo" 0 "bar"))
-  (wcar my-wcar-opts (car/zadd :store 0 "foo1"))
-  (wcar my-wcar-opts (car/zadd :store 0 "foo2"))
-  (wcar my-wcar-opts (car/zadd :store 12 "foo3"))
-
-  (wcar my-wcar-opts (car/zrange :store 0 1))
-  (wcar my-wcar-opts (car/zrange :store 0 1 "WITHSCORES"))
-  (wcar my-wcar-opts (car/zrange :store "(foo" "[foo1" "BYLEX"))
-  (wcar my-wcar-opts (car/zrange :store "(foo" "+" "BYLEX"))
-
-
-
-  (wcar my-wcar-opts (car/zrange :store "(foo" "foo2" "BYLEX"))
-  (wcar my-wcar-opts (car/zrangebylex :store "foo" "foo2"))
-  (wcar my-wcar-opts (car/zrangebylex :store "foo" "foo2"))
-  )
+  (alive? my-wcar-opts))
