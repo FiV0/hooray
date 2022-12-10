@@ -2,9 +2,10 @@
 
  :deps
  {org.clojure/clojure                 {:mvn/version "1.11.1"}
-  org.clojure/spec.alpha              {:mvn/version "0.3.218"}
-  org.clojure/core.rrb-vector         {:mvn/version "0.1.1"}
   org.clojure/core.match              {:mvn/version "1.0.0"}
+  org.clojure/core.rrb-vector         {:mvn/version "0.1.1"}
+  org.clojure/math.combinatorics      {:mvn/version "0.1.6"}
+  org.clojure/spec.alpha              {:mvn/version "0.3.218"}
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
   medley/medley                       {:mvn/version "1.4.0"}
   spootnik/unilog                     {:mvn/version "0.7.30"}
@@ -37,8 +38,7 @@
  :aliases
  {:dev
   {:extra-paths ["dev" "examples"]
-   :extra-deps  {org.clojure/math.combinatorics {:mvn/version "0.1.6"}
-                 org.clojars.quoll/asami        {:mvn/version "2.3.0"}
+   :extra-deps  {org.clojars.quoll/asami        {:mvn/version "2.3.0"}
                  datalevin/datalevin            {:mvn/version "0.7.7"}
                  com.xtdb/xtdb-core             {:mvn/version "1.21.0"}
                  ;; {:local/root "../../xtdb/xtdb/core/"}
