@@ -1,8 +1,11 @@
 (ns hooray.db.persistent.fdb
   (:require [me.vedang.clj-fdb.FDB :as cfdb]
             [me.vedang.clj-fdb.core :as fc]
-            [me.vedang.clj-fdb.transaction :as ftr]
+            [me.vedang.clj-fdb.impl :as fimpl]
             [me.vedang.clj-fdb.subspace.subspace :as fsub]
+            [me.vedang.clj-fdb.transaction :as ftr]
+            [me.vedang.clj-fdb.tuple.tuple :as ftub]
+            [me.vedang.clj-fdb.range :as frange]
             [taoensso.nippy :as nippy]))
 
 (def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
@@ -37,6 +40,11 @@
   (let [subspace (fsub/create [keyspace])]
     (when (fc/get db subspace k) k)))
 
+(defn- ->byte-array [ba1 ba2]
+  (byte-array (mapcat seq [ba1 ba2])))
+
+
+
 (defn get-range
   ([db keyspace start-k stop-k]
    (throw (ex-info "Not yet implemented! Missing `stop-k` option." {}))
@@ -44,11 +52,15 @@
   ([db keyspace start-k stop-k limit]
    (throw (ex-info "Not yet implemented! Missing `stop-k` option." {}))))
 
-
 (defn seek
   ([db keyspace prefix-k]
    (let [subspace (fsub/create [keyspace])]
-     (fc/get-range db subspace prefix-k)))
+     (fc/get-range db (fsub/create (->byte-array (fsub/pack subspace) prefix-k)))
+     #_(fc/get-range db (frange/starts-with (->byte-array (fsub/pack subspace) prefix-k)))
+     (fc/get-range db (frange/starts-with (->byte-array (fsub/pack subspace) prefix-k)))
+     (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k) #_(->byte-array (fsub/pack subspace) prefix-k)))
+     (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k)))
+     #_(fc/get-range db subspace prefix-k)))
   ([conn keyspace prefix-k limit]
    (throw (ex-info "Not yet implemented! Missing `limit` option." {}))))
 
@@ -63,8 +75,20 @@
        (map ->buffer)
        (set-ks db "store"))
 
+  (def subspace (fsub/create ["store"]))
+  (def ^:private empty-byte-array (byte-array 0))
 
-  (->> (seek db "store" (->buffer "foo"))
+  (-> (fc/get-range db subspace)
+      (update-keys (fn [v] (map ->value v))))
+
+  (fc/get-range db subspace empty-byte-array)
+  (fc/get-range db subspace (->buffer "foo"))
+
+  (def prefix-k (->buffer "foo"))
+  (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k)))
+  (subspace prefix-k)
+
+  (->> (seek db "store" (->buffer "fo0"))
        #_(map #(try (->value %) (catch Exception e :some-error))))
 
   )
