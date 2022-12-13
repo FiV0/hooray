@@ -78,13 +78,37 @@
                           #_#_:keyfn #(update % 1 ->value)})
           (map (comp second first))))))
 
+;; TODO add keycount manually
+;; maybe adapt set-k/set-ks
+(defn count-ks
+  ([db keyspace] (throw (ex-info "key count currently not by fdb!" {})))
+  ([db keyspace prefix-k] (throw (ex-info "key count currently not by fdb!" {})) )
+  ([db keyspace start-k stop-k] (throw (ex-info "key count currently not by fdb!" {}))))
 
+;; ADMIN
+
+(defn clear-set
+  "WARNING! This clears the entire keyspace."
+  [db keyspace]
+  (let [subspace (fsub/create [keyspace])]
+    (fc/clear-range db (fsub/range subspace))))
+
+(def ^:private smallest-ba (byte-array [(unchecked-byte 0x01)]))
+(def ^:private largest-ba (byte-array [(unchecked-byte 0xff)]))
+
+(defn clear-db
+  "WARNING! This clears the entire db."
+  [db]
+  (fc/clear-range db (frange/range smallest-ba largest-ba)))
 
 (comment
   (set-k db "store" (->buffer "foo"))
   (->value (get-k db "store" (->buffer "foo")))
   (get-k db "store" (->buffer "dafdsa"))
   (delete-k db "store" (->buffer "foo"))
+
+  (clear-set db "store")
+  (clear-db db)
 
   (->> (for [i (range 10)]
          (str "foo" i))
