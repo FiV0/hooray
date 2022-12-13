@@ -6,7 +6,10 @@
             [me.vedang.clj-fdb.transaction :as ftr]
             [me.vedang.clj-fdb.tuple.tuple :as ftub]
             [me.vedang.clj-fdb.range :as frange]
+            [me.vedang.clj-fdb.key-selector :as key-selector]
             [taoensso.nippy :as nippy]))
+
+;; TODO/TO consider maybe use the tuple model directly for the indices
 
 (def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
 (def db (cfdb/open fdb))
@@ -40,29 +43,42 @@
   (let [subspace (fsub/create [keyspace])]
     (when (fc/get db subspace k) k)))
 
-(defn- ->byte-array [ba1 ba2]
-  (byte-array (mapcat seq [ba1 ba2])))
-
-
-
+;; TODO figure out how to get rid of the subspace in the keys
 (defn get-range
   ([db keyspace start-k stop-k]
-   (throw (ex-info "Not yet implemented! Missing `stop-k` option." {}))
-   #_(fc/get-range db subspace (fc/range start-k stop-k)))
+   (let [subspace (fsub/create [keyspace])]
+     (->> (fc/get-range2 db
+                         (key-selector/first-greater-or-equal (fsub/pack subspace start-k))
+                         (key-selector/first-greater-or-equal (fsub/pack subspace stop-k))
+                         #_{:keyfn #(update % 1 ->value)})
+          (map (comp second first)))))
   ([db keyspace start-k stop-k limit]
-   (throw (ex-info "Not yet implemented! Missing `stop-k` option." {}))))
+   (let [subspace (fsub/create [keyspace])]
+     (->> (fc/get-range2 db
+                         (key-selector/first-greater-or-equal (fsub/pack subspace start-k))
+                         (key-selector/first-greater-or-equal (fsub/pack subspace stop-k))
+                         {:limit limit
+                          #_#_:keyfn #(update % 1 ->value)})
+          (map (comp second first))))))
 
 (defn seek
   ([db keyspace prefix-k]
    (let [subspace (fsub/create [keyspace])]
-     (fc/get-range db (fsub/create (->byte-array (fsub/pack subspace) prefix-k)))
-     #_(fc/get-range db (frange/starts-with (->byte-array (fsub/pack subspace) prefix-k)))
-     (fc/get-range db (frange/starts-with (->byte-array (fsub/pack subspace) prefix-k)))
-     (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k) #_(->byte-array (fsub/pack subspace) prefix-k)))
-     (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k)))
-     #_(fc/get-range db subspace prefix-k)))
-  ([conn keyspace prefix-k limit]
-   (throw (ex-info "Not yet implemented! Missing `limit` option." {}))))
+     (->> (fc/get-range2 db
+                         (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
+                         (key-selector/first-greater-than (.-end (fsub/range subspace)))
+                         #_{:keyfn #(update % 1 ->value)})
+          (map (comp second first)))))
+  ([db keyspace prefix-k limit]
+   (let [subspace (fsub/create [keyspace])]
+     (->> (fc/get-range2 db
+                         (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
+                         (key-selector/first-greater-than (.-end (fsub/range subspace)))
+                         {:limit limit
+                          #_#_:keyfn #(update % 1 ->value)})
+          (map (comp second first))))))
+
+
 
 (comment
   (set-k db "store" (->buffer "foo"))
@@ -75,106 +91,15 @@
        (map ->buffer)
        (set-ks db "store"))
 
-  (def subspace (fsub/create ["store"]))
-  (def ^:private empty-byte-array (byte-array 0))
+  (->> (get-range db "store" (->buffer "foo") (->buffer "foo2"))
+       (map ->value))
 
-  (-> (fc/get-range db subspace)
-      (update-keys (fn [v] (map ->value v))))
+  (->> (get-range db "store" (->buffer "foo") (->buffer "foo5") 3)
+       (map ->value))
 
-  (fc/get-range db subspace empty-byte-array)
-  (fc/get-range db subspace (->buffer "foo"))
+  (->> (seek db "store" (->buffer "foo"))
+       (map #(try (->value %) (catch Exception e :some-error))))
 
-  (def prefix-k (->buffer "foo"))
-  (fc/get-range db (frange/starts-with (fimpl/encode subspace prefix-k)))
-  (subspace prefix-k)
-
-  (->> (seek db "store" (->buffer "fo0"))
-       #_(map #(try (->value %) (catch Exception e :some-error))))
-
+  (->> (seek db "store" (->buffer "foo") 5)
+       (map #(try (->value %) (catch Exception e :some-error))))
   )
-
-
-
-;; Set a value in the DB.
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)]
-  (with-open [db (cfdb/open fdb)]
-    (fc/set db ["a" "test" "key"] ["some value"])))
-;; => nil
-
-;; Read this value back in the DB.
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)]
-  (with-open [db (cfdb/open fdb)]
-    (fc/get db ["a" "test" "key"])))
-;; => ["some value"]
-
-;; FDB's Tuple Layer is super handy for efficient range reads. Each
-;; element of the tuple can act as a prefix (from left to right).
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)]
-  (with-open [db (cfdb/open fdb)]
-    (fc/set db ["test" "keys" "A"] ["value A"])
-    (fc/set db ["test" "keys" "B"] ["value B"])
-    (fc/set db ["test" "keys" "C"] ["value C"])
-    (fc/get-range db ["test" "keys"])))
-;; => {["test" "keys" "A"] ["value A"],
-;;     ["test" "keys" "B"] ["value B"],
-;;     ["test" "keys" "C"] ["value C"]}
-
-;; FDB's Subspace Layer provides a neat way to logically namespace keys.
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)
-      subspace (fsub/create ["test" "keys"])]
-  (with-open [db (cfdb/open fdb)]
-    (fc/set db subspace ["A"] ["Value A"])
-    (fc/set db subspace ["B"] ["Value B"])
-    (fc/get db subspace ["A"])))
-;; => ["Value A"]
-
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)
-      subspace (fsub/create ["test" "keys"])]
-  (with-open [db (cfdb/open fdb)]
-    (fc/set db subspace ["A"] ["Value A"])
-    (fc/set db subspace ["B"] ["Value B"])
-    (fc/get-range db subspace [] {:valfn first})))
-;; => {["A"] "Value A", ["B"] "Value B"}
-
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)
-      subspace (fsub/create ["test" "keys"])]
-  (with-open [db (cfdb/open fdb)]
-    (fc/set db subspace ["A"] ["Value A"])
-    (fc/set db subspace ["B"] ["Value B"])
-    (fc/get-range db subspace [])))
-;; => {["A"] ["Value A"], ["B"] ["Value B"], ["C"] ["value C"]}
-
-;; FDB's functions are beautifully composable. So you needn't
-;; execute each step of the above function in independent
-;; transactions. You can perform them all inside a single
-;; transaction. (with the full power of ACID behind you)
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)]
-  (with-open [db (cfdb/open fdb)]
-    (ftr/run db
-      (fn [tr]
-        (fc/set tr ["test" "keys" "A"] ["value inside transaction A"])
-        (fc/set tr ["test" "keys" "B"] ["value inside transaction B"])
-        (fc/set tr ["test" "keys" "C"] ["value inside transaction C"])
-        (fc/get-range tr ["test" "keys"])))))
-;; => {["test" "keys" "A"] ["value inside transaction A"],
-;;     ["test" "keys" "B"] ["value inside transaction B"],
-;;     ["test" "keys" "C"] ["value inside transaction C"]}
-
-;; The beauty and power of this is here:
-(let [fdb (cfdb/select-api-version cfdb/clj-fdb-api-version)]
-  (with-open [db (cfdb/open fdb)]
-    (try (ftr/run db
-           (fn [tr]
-             (fc/set tr ["test" "keys" "A"] ["NEW value A"])
-             (fc/set tr ["test" "keys" "B"] ["NEW value B"])
-             (fc/set tr ["test" "keys" "C"] ["NEW value C"])
-             (throw (ex-info "I don't like completing transactions"
-                             {:boo :hoo}))))
-         (catch Exception _
-           (fc/get-range db ["test" "keys"])))))
-;; => {["test" "keys" "A"] ["value inside transaction A"],
-;;     ["test" "keys" "B"] ["value inside transaction B"],
-;;     ["test" "keys" "C"] ["value inside transaction C"]}
-;; No change to the values because the transaction did not succeed!
-
-;; I hope this helps you get started with using this library!

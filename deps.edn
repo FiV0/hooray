@@ -17,8 +17,10 @@
   ;; foundationdb
   org.foundationdb/fdb-java           {:mvn/version "6.3.23"}
   me.vedang/clj-fdb
+  {:git/url "https://github.com/FiV0/clj_fdb.git"
+   :git/sha "1338a75e09010674dddf45c42c3f107453295b78"}
   #_{:local/root "../clj_fdb"}
-  {:mvn/version "0.3.0"}
+  #_{:mvn/version "0.3.0"}
 
 
   ;; in flux

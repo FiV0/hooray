@@ -24,8 +24,6 @@
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
-
-;; TODO replace :store with something like configurable :eav
 (defn set-k [conn keyspace k]
   (wcar conn (car/zadd keyspace 0 (car/raw k))))
 
