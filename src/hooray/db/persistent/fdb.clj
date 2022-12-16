@@ -10,6 +10,7 @@
             [taoensso.nippy :as nippy]))
 
 ;; TODO/TO consider maybe use the tuple model directly for the indices
+;; TODO add caching for subspace creation
 
 (def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
 (def db (cfdb/open fdb))
@@ -85,30 +86,12 @@
   ([db keyspace prefix-k] (throw (ex-info "key count currently not by fdb!" {})) )
   ([db keyspace start-k stop-k] (throw (ex-info "key count currently not by fdb!" {}))))
 
-;; ADMIN
-
-(defn clear-set
-  "WARNING! This clears the entire keyspace."
-  [db keyspace]
-  (let [subspace (fsub/create [keyspace])]
-    (fc/clear-range db (fsub/range subspace))))
-
-(def ^:private smallest-ba (byte-array [(unchecked-byte 0x01)]))
-(def ^:private largest-ba (byte-array [(unchecked-byte 0xff)]))
-
-(defn clear-db
-  "WARNING! This clears the entire db."
-  [db]
-  (fc/clear-range db (frange/range smallest-ba largest-ba)))
-
 (comment
   (set-k db "store" (->buffer "foo"))
   (->value (get-k db "store" (->buffer "foo")))
   (get-k db "store" (->buffer "dafdsa"))
   (delete-k db "store" (->buffer "foo"))
 
-  (clear-set db "store")
-  (clear-db db)
 
   (->> (for [i (range 10)]
          (str "foo" i))
@@ -127,3 +110,67 @@
   (->> (seek db "store" (->buffer "foo") 5)
        (map #(try (->value %) (catch Exception e :some-error))))
   )
+
+;; DOC STORE
+
+(defn set-kv [db keyspace k v]
+  (let [subspace (fsub/create [keyspace])]
+    (fc/set db subspace k v)))
+
+(defn set-kvs [db keyspace kvs]
+  (let [subspace (fsub/create [keyspace])]
+    (ftr/run db
+      (fn [tr]
+        (doseq [[k v] kvs]
+          (fc/set tr subspace k v))))))
+
+(defn get-kv [db keyspace k]
+  (let [subspace (fsub/create [keyspace])]
+    (fc/get db subspace k)))
+
+(defn get-kvs [db keyspace ks]
+  (let [subspace (fsub/create [keyspace])]
+    (ftr/run db
+      (fn [tr]
+        (doall (map (partial fc/get tr subspace) ks))))))
+
+(defn delete-kv [db keyspace k]
+  (let [subspace (fsub/create [keyspace])]
+    (fc/clear db subspace k)))
+
+(defn delete-kvs [db keyspace ks]
+  (let [subspace (fsub/create [keyspace])]
+    (ftr/run db
+      (fn [tr]
+        (run! (partial fc/clear tr subspace) ks)))))
+
+(comment
+  (set-kv db "doc-store" (->buffer "foo") (->buffer "bar"))
+  (->value (get-kv db "doc-store" (->buffer "foo")))
+  (set-kvs db "doc-store" [[(->buffer "foo") (->buffer "bar")] [(->buffer "foo0") (->buffer "bar0")]])
+  (->> (get-kvs db "doc-store" [(->buffer "foo") (->buffer "foo0")])
+       (map ->value))
+  (delete-kv db "doc-store" (->buffer "foo0"))
+  (get-kv db "doc-store" (->buffer "foo0"))
+  (delete-kvs db "doc-store" [(->buffer "foo") (->buffer "foo0")])
+  (get-kv db "doc-store" (->buffer "foo")))
+
+;; ADMIN
+
+(defn clear-set
+  "WARNING! This clears the entire keyspace."
+  [db keyspace]
+  (let [subspace (fsub/create [keyspace])]
+    (fc/clear-range db (fsub/range subspace))))
+
+(def ^:private smallest-ba (byte-array [(unchecked-byte 0x01)]))
+(def ^:private largest-ba (byte-array [(unchecked-byte 0xff)]))
+
+(defn clear-db
+  "WARNING! This clears the entire db."
+  [db]
+  (fc/clear-range db (frange/range smallest-ba largest-ba)))
+
+(comment
+  (clear-set db "store")
+  (clear-db db))
