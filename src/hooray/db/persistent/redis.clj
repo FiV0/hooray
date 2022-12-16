@@ -4,15 +4,23 @@
             [taoensso.nippy :as nippy]))
 
 ;; API an persistent key/value store should support
-;; set-kv store k
-;; set-kvs store ks
-;; delete-kv store k
-;; delete-kvs store ks
+;; set-k store k
+;; set-ks store ks
+;; delete-k store k
+;; delete-ks store ks
 ;; get store k
 ;; get-range store prefix-k
 ;; get-range store prefix-k limit
 ;; seek ? is essentially supported by get-range
 ;; count store prefix-k
+
+;; DOC STORE
+;; set-kv store k v
+;; set-kvs store kvs
+;; get-kv store k -> v
+;; get-kvs store ks -> vs
+;; delete-kv store k
+;; delete-kvs store kvs
 
 (defonce my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
 (def     my-conn-spec-1 {:uri "redis://localhost:6379/"})
@@ -78,22 +86,6 @@
   ([conn keyspace start-k stop-k]
    (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
 
-;; ADMIN
-
-(defn clear-set
-  "WARNING! This clears the entire keyspace."
-  [conn keyspace]
-  (wcar conn (car/del keyspace)))
-
-;; TODO handle return value
-(defn clear-db
-  "WARNING! This clears the entire db."
-  [conn]
-  (wcar conn (car/flushdb)))
-
-(defn alive? [conn]
-  (= "PONG" (wcar conn (car/ping))))
-
 (comment
   (set-k wcar-opts :store (->buffer "foo"))
   (->value (get-k wcar-opts :store (->buffer "foo")))
@@ -123,9 +115,59 @@
 
   (->> (count-ks wcar-opts :store))
   (->> (count-ks wcar-opts :store (->buffer "foo2")))
-  (->> (count-ks wcar-opts :store (->buffer "foo") (->buffer "foo4")))
+  (->> (count-ks wcar-opts :store (->buffer "foo") (->buffer "foo4"))))
 
+;; DOC STORE
+
+(defn set-kv [conn keyspace k v]
+  (wcar conn (car/hset keyspace (car/raw k) (car/raw v))))
+
+(defn set-kvs [conn keyspace kvs]
+  (wcar conn (apply car/hset keyspace (mapcat (fn [[k v]] [(car/raw k) (car/raw v)]) kvs))))
+
+(defn get-kv [conn keyspace k]
+  (wcar conn (-> (car/hget keyspace (car/raw k)) car/parse-raw)))
+
+(defn get-kvs [conn keyspace ks]
+  (wcar conn (-> (apply car/hmget keyspace (map car/raw ks)) car/parse-raw)))
+
+(defn delete-kv [conn keyspace k]
+  (wcar conn (car/hdel keyspace (car/raw k))))
+
+(defn delete-kvs [conn keyspace ks]
+  (wcar conn (apply car/hdel keyspace (map car/raw ks))))
+
+(comment
+  (set-kv wcar-opts :doc-store (->buffer "foo") (->buffer "bar"))
+  (->value (get-kv wcar-opts :doc-store (->buffer "foo")))
+  (set-kvs wcar-opts :doc-store [[(->buffer "foo") (->buffer "bar")] [(->buffer "foo0") (->buffer "bar0")]])
+  (->> (get-kvs wcar-opts :doc-store [(->buffer "foo") (->buffer "foo0")])
+       (map ->value))
+  (delete-kv wcar-opts :doc-store (->buffer "foo0"))
+  (get-kv wcar-opts :doc-store (->buffer "foo0"))
+  (delete-kvs wcar-opts :doc-store [(->buffer "foo") (->buffer "foo0")])
+  (get-kv wcar-opts :doc-store (->buffer "foo")))
+
+;; ADMIN
+
+(defn clear-set
+  "WARNING! This clears the entire keyspace."
+  [conn keyspace]
+  (wcar conn (car/del keyspace)))
+
+;; TODO handle return value
+(defn clear-db
+  "WARNING! This clears the entire db."
+  [conn]
+  (wcar conn (car/flushdb)))
+
+(defn alive? [conn]
+  (= "PONG" (wcar conn (car/ping))))
+
+(comment
   (alive? wcar-opts))
+
+
 
 ;; INFO parsing
 
