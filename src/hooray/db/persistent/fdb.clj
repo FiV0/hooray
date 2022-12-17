@@ -33,12 +33,35 @@
   (let [subspace (fsub/create [keyspace])]
     (fc/clear db subspace k)))
 
-(defn clear-ks [db keyspace ks]
+(defn delete-ks [db keyspace ks]
   (let [subspace (fsub/create [keyspace])]
     (ftr/run db
       (fn [tr]
         (doseq [k ks]
           (fc/clear tr subspace k))))))
+
+(defn- third [c] (nth c 2))
+(def ^:private seperate (juxt filter remove))
+
+(defn- keyspace->subspace [keyspace]
+  (fsub/create [keyspace]))
+
+(defn upsert-ks [db ks]
+  (let [key-fn #(map second %)
+        [asserts deletes] (->> (seperate third ks)
+                               (map (comp #(update-vals % key-fn)
+                                          #(update-keys % keyspace->subspace)
+                                          #(group-by first %))))]
+    (ftr/run db
+      (fn [tr]
+        (run! (fn [[subspace ks]]
+                (doseq [k ks]
+                  (fc/set tr subspace k nil)))
+              asserts)
+        (run! (fn [[subspace ks]]
+                (doseq [k ks]
+                  (fc/clear tr subspace k)))
+              deletes)))))
 
 (defn get-k [db keyspace k]
   (let [subspace (fsub/create [keyspace])]
@@ -92,6 +115,10 @@
   (get-k db "store" (->buffer "dafdsa"))
   (delete-k db "store" (->buffer "foo"))
 
+  (upsert-ks db [["store" (->buffer "foo") nil] ["store" (->buffer "foo1") true] ["store1" (->buffer "foo") true]])
+  (get-k db "store" (->buffer "foo"))
+  (get-k db "store1" (->buffer "foo"))
+  (get-k db "store" (->buffer "foo1"))
 
   (->> (for [i (range 10)]
          (str "foo" i))
@@ -144,6 +171,24 @@
       (fn [tr]
         (run! (partial fc/clear tr subspace) ks)))))
 
+(defn upsert-kvs [db kvs]
+  (let [key-fn #(map second %)
+        [asserts deletes] (->> (seperate third kvs)
+                               (map (comp #(update-vals % key-fn)
+                                          #(update-keys % keyspace->subspace)
+                                          #(group-by first %))))]
+    (ftr/run db
+      (fn [tr]
+        (run! (fn [[subspace kvs]]
+                (doseq [[k v] kvs]
+                  (fc/set tr subspace k v)))
+              asserts)
+        (run! (fn [[subspace ks]]
+                (doseq [k ks]
+                  (fc/clear tr subspace k)))
+              deletes)))))
+
+
 (comment
   (set-kv db "doc-store" (->buffer "foo") (->buffer "bar"))
   (->value (get-kv db "doc-store" (->buffer "foo")))
@@ -153,7 +198,13 @@
   (delete-kv db "doc-store" (->buffer "foo0"))
   (get-kv db "doc-store" (->buffer "foo0"))
   (delete-kvs db "doc-store" [(->buffer "foo") (->buffer "foo0")])
-  (get-kv db "doc-store" (->buffer "foo")))
+  (get-kv db "doc-store" (->buffer "foo"))
+  (upsert-kvs db [["doc-store" (->buffer "foo") nil]
+                  ["doc-store" [(->buffer "foo1") (->buffer "bar")] true]
+                  ["doc-store1" [(->buffer "foo") (->buffer "bar")] true]])
+  (get-kv db "doc-store" (->buffer "foo"))
+  (->value (get-kv db "doc-store" (->buffer "foo1")))
+  (->value (get-kv db "doc-store1" (->buffer "foo"))))
 
 ;; ADMIN
 
