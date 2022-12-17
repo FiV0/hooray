@@ -3,28 +3,6 @@
             [taoensso.carmine :as car :refer [wcar]]
             [taoensso.nippy :as nippy]))
 
-;; API an persistent key/value store should support
-;; set-k store k
-;; set-ks store ks
-;; delete-k store k
-;; delete-ks store ks
-;; upsert-ks store ks - combination of set and delete
-;; get store k
-;; get-range store prefix-k
-;; get-range store prefix-k limit
-;; seek ? is essentially supported by get-range
-;; count store prefix-k
-
-;; DOC STORE
-;; set-kv store k v
-;; set-kvs store kvs
-;; get-kv store k -> v
-;; get-kvs store ks -> vs
-;; delete-kv store k
-;; delete-kvs store kvs
-;; upsert-kvs store kvs - combination of set and delete
-
-
 (defonce my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
 (def     my-conn-spec-1 {:uri "redis://localhost:6379/"})
 
