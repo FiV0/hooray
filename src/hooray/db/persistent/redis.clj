@@ -1,14 +1,18 @@
 (ns hooray.db.persistent.redis
   (:require [clojure.string :as str]
+            [hooray.db :as db]
+            [hooray.db.persistent :as per]
             [taoensso.carmine :as car :refer [wcar]]
-            [taoensso.nippy :as nippy]))
+            [taoensso.nippy :as nippy])
+  (:import (taoensso.carmine.connections ConnectionPool)))
 
-(defonce my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
-(def     my-conn-spec-1 {:uri "redis://localhost:6379/"})
+(comment
+  (defonce my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
+  (def     my-conn-spec-1 {:uri "redis://localhost:6379/"})
 
-(def wcar-opts
-  {:pool my-conn-pool
-   :spec my-conn-spec-1})
+  (def wcar-opts
+    {:pool my-conn-pool
+     :spec my-conn-spec-1}))
 
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
@@ -118,6 +122,25 @@
   (->> (count-ks wcar-opts :store (->buffer "foo2")))
   (->> (count-ks wcar-opts :store (->buffer "foo") (->buffer "foo4"))))
 
+(defrecord RedisKeyStore [conn]
+  per/KeyStore
+  (set-k [this keyspace k] (set-k conn keyspace k))
+  (set-ks [this keyspace ks] (set-ks conn keyspace ks))
+  (delete-k [this keyspace k] (delete-k conn keyspace k))
+  (delete-ks [this keyspace ks] (delete-ks conn keyspace ks))
+  (upsert-ks [this ops] (upsert-ks conn ops))
+  (get-k [this keyspace k] (get-k conn keyspace k))
+  (get-range [this keyspace begin end] (get-range conn keyspace begin end))
+  (get-range [this keyspace begin end limit] (get-range conn keyspace begin end limit))
+  (seek [this keyspace prefix-k] (seek conn keyspace prefix-k))
+  (seek [this keyspace prefix-k limit] (seek conn keyspace prefix-k limit))
+  (count-ks [this keyspace] (count-ks conn keyspace))
+  (count-ks [this keyspace prefix-k] (count-ks conn keyspace prefix-k))
+  (count-ks [this keyspace begin end] (count-ks conn keyspace begin end)))
+
+(defn ->redis-key-store [conn]
+  (->RedisKeyStore conn))
+
 ;; DOC STORE
 
 (defn set-kv [conn keyspace k v]
@@ -167,6 +190,19 @@
   (->value (get-kv wcar-opts :doc-store (->buffer "foo1")))
   (->value (get-kv wcar-opts :doc-store1 (->buffer "foo"))))
 
+(defrecord RedisDocStore [conn]
+  per/DocStore
+  (set-kv [this keyspace k v] (set-kv conn keyspace k v))
+  (set-kvs [this keyspace kvs] (set-kvs conn keyspace kvs))
+  (get-kv [this keyspace k] (get-kv conn keyspace k))
+  (get-kvs [this keyspace ks] (get-kvs conn keyspace ks))
+  (delete-kv [this keyspace k] (delete-kv conn keyspace k))
+  (delete-kvs [this keyspace ks] (delete-kvs conn keyspace ks))
+  (upsert-kvs [this ops] (upsert-kvs conn ops)))
+
+(defn ->redis-doc-store [conn]
+  (->RedisDocStore conn))
+
 ;; ADMIN
 
 (defn clear-set
@@ -187,8 +223,6 @@
   (clear-db wcar-opts)
   (alive? wcar-opts))
 
-
-
 ;; INFO parsing
 
 (defn- parse-kv [kv]
@@ -206,3 +240,20 @@
 
 (comment
   (info wcar-opts))
+
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                  Connection
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+(defn uri->connection [uri]
+  {:pool (car/connection-pool {})
+   :spec {:uri uri}})
+
+(defn redis-connection? [conn]
+  (and (map? conn) (instance? (:pool conn) ConnectionPool)))
+
+(defn close-connection [conn]
+  {:pre [(redis-connection? conn)]}
+  (.close (:pool conn)))

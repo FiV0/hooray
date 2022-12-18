@@ -12,8 +12,9 @@
 ;; TODO/TO consider maybe use the tuple model directly for the indices
 ;; TODO add caching for subspace creation
 
-(def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
-(def db (cfdb/open fdb))
+(comment
+  (def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
+  (def db (cfdb/open fdb)))
 
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
@@ -105,9 +106,9 @@
 ;; TODO add keycount manually
 ;; maybe adapt set-k/set-ks
 (defn count-ks
-  ([db keyspace] (throw (ex-info "key count currently not by fdb!" {})))
-  ([db keyspace prefix-k] (throw (ex-info "key count currently not by fdb!" {})) )
-  ([db keyspace start-k stop-k] (throw (ex-info "key count currently not by fdb!" {}))))
+  ([db keyspace] (throw (ex-info "key count currently not supported by fdb!" {})))
+  ([db keyspace prefix-k] (throw (ex-info "key count currently not supported by fdb!" {})) )
+  ([db keyspace start-k stop-k] (throw (ex-info "key count currently not supported by fdb!" {}))))
 
 (comment
   (set-k db "store" (->buffer "foo"))
