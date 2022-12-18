@@ -1,19 +1,24 @@
 (ns hooray.db.persistent.fdb
-  (:require [me.vedang.clj-fdb.FDB :as cfdb]
+  (:require [hooray.db.persistent :as per]
+            [me.vedang.clj-fdb.FDB :as cfdb]
             [me.vedang.clj-fdb.core :as fc]
             [me.vedang.clj-fdb.impl :as fimpl]
+            [me.vedang.clj-fdb.key-selector :as key-selector]
+            [me.vedang.clj-fdb.range :as frange]
             [me.vedang.clj-fdb.subspace.subspace :as fsub]
             [me.vedang.clj-fdb.transaction :as ftr]
             [me.vedang.clj-fdb.tuple.tuple :as ftub]
-            [me.vedang.clj-fdb.range :as frange]
-            [me.vedang.clj-fdb.key-selector :as key-selector]
-            [taoensso.nippy :as nippy]))
+            [taoensso.nippy :as nippy])
+  (:import (com.apple.foundationdb FDBDatabase)))
 
 ;; TODO/TO consider maybe use the tuple model directly for the indices
 ;; TODO add caching for subspace creation
 
+;; A fdb object that assures the correct API version is selected.
+;; DB instrances are created from this
+(def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
+
 (comment
-  (def fdb (cfdb/select-api-version cfdb/clj-fdb-api-version))
   (def db (cfdb/open fdb)))
 
 (defn ->buffer [v] (nippy/freeze v))
@@ -226,3 +231,20 @@
 (comment
   (clear-set db "store")
   (clear-db db))
+
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                  Connection
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+(defmethod per/config-map->conn :fdb [config-map]
+  (assert (-> config-map :spec :uri) "Redis config-map must contain an uri!")
+  (cfdb/open fdb))
+
+(defn fdb-connection? [conn]
+  (instance? conn FDBDatabase))
+
+(defn close-connection [conn]
+  {:pre [(fdb-connection? conn)]}
+  (.close conn))

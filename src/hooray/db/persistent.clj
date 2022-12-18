@@ -6,6 +6,17 @@
 (defmethod db/connect* :persistent [uri-map]
   (throw (ex-info "Persistent connections are currently not supported!" uri-map)))
 
+;; The idea is to have either a connection string or a config-map
+;; Redis as an example
+(comment
+  {:type :redis
+   :spec {:uri "redis://localhost:6379/"}})
+
+(defmulti config-map->conn (fn [config-map] (:type config-map)))
+
+(defmethod config-map->conn :default [config-map]
+  (throw (ex-info "Unkown connection type!" {:config-map config-map})))
+
 ;; API an persistent key/value store should support
 ;; set-k store k
 ;; set-ks store ks

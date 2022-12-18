@@ -247,9 +247,10 @@
 ;;===============================================================================
 ;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
-(defn uri->connection [uri]
+(defmethod per/config-map->conn :redis [config-map]
+  (assert (-> config-map :spec :uri) "Redis config-map must contain an uri!")
   {:pool (car/connection-pool {})
-   :spec {:uri uri}})
+   :spec (:spec config-map)})
 
 (defn redis-connection? [conn]
   (and (map? conn) (instance? (:pool conn) ConnectionPool)))
