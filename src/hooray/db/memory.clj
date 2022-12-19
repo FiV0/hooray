@@ -2,14 +2,15 @@
   (:require [clojure.spec.alpha :as s]
             [hooray.datom :as datom :refer [->Datom]]
             [hooray.db :as db]
-            [hooray.graph :as graph]
+            [hooray.db.memory.bitemp-graph :as bi-graph]
             [hooray.db.memory.graph :as mem-graph]
             [hooray.db.memory.graph-index :as g-index]
-            [hooray.db.memory.bitemp-graph :as bi-graph]
+            [hooray.graph :as graph]
+            [hooray.txn]
             [hooray.util :as util])
-  (:import (java.io Closeable)
-           (hooray.db.memory.graph MemoryGraph)
-           (hooray.db.memory.graph_index MemoryGraphIndexed)))
+  (:import (hooray.db.memory.graph MemoryGraph)
+           (hooray.db.memory.graph_index MemoryGraphIndexed)
+           (java.io Closeable)))
 
 (defrecord MemoryDatabase [graph history timestamp opts]
   db/Database
@@ -54,19 +55,6 @@
   (let [opts {:uri-map uri-map}
         db (->MemoryDatabase (bi-graph/memory-bitemp-graph) [] (util/now) opts)]
     (->MemoryConnection name (atom {:db db}) type)))
-
-(s/def :hooray/map-transaction map?)
-(s/def :hooray/add-transaction #(and (= :db/add (first %)) (vector? %) (= 4 (count %))))
-(s/def :hooray/retract-transaction #(and (= :db/retract (first %)) (vector? %) (= 4 (count %))))
-(s/def :hooray/transaction (s/or :map :hooray/map-transaction
-                                 :add :hooray/add-transaction
-                                 :retract :hooray/retract-transaction))
-(s/def :hooray/tx-data (s/* :hooray/transaction))
-
-(comment
-  (s/valid? :hooray/tx-data [{:db/id "foo"
-                              :foo/bar "x"}
-                             [:db/add "foo" :is/cool true]]))
 
 (defn- map->datoms [m ts]
   (let [eid (or (:db/id m) (random-uuid))]
