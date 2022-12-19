@@ -1,7 +1,6 @@
 (ns hooray.db.persistent.redis
   (:require [clojure.string :as str]
-            [hooray.db :as db]
-            [hooray.db.persistent :as per]
+            [hooray.db.persistent.protocols :as per]
             [taoensso.carmine :as car :refer [wcar]]
             [taoensso.nippy :as nippy])
   (:import (taoensso.carmine.connections ConnectionPool)))

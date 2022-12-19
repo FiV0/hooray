@@ -1,13 +1,11 @@
 (ns hooray.db.persistent.fdb
-  (:require [hooray.db.persistent :as per]
+  (:require [hooray.db.persistent.protocols :as per]
             [me.vedang.clj-fdb.FDB :as cfdb]
             [me.vedang.clj-fdb.core :as fc]
-            [me.vedang.clj-fdb.impl :as fimpl]
             [me.vedang.clj-fdb.key-selector :as key-selector]
             [me.vedang.clj-fdb.range :as frange]
             [me.vedang.clj-fdb.subspace.subspace :as fsub]
             [me.vedang.clj-fdb.transaction :as ftr]
-            [me.vedang.clj-fdb.tuple.tuple :as ftub]
             [taoensso.nippy :as nippy])
   (:import (com.apple.foundationdb FDBDatabase)))
 
@@ -239,8 +237,9 @@
 ;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 (defmethod per/config-map->conn :fdb [config-map]
-  (assert (-> config-map :spec :uri) "Redis config-map must contain an uri!")
-  (cfdb/open fdb))
+  (if-let [cluster-file (-> config-map :spec :cluster-file)]
+    (cfdb/open fdb cluster-file)
+    (cfdb/open fdb)))
 
 (defn fdb-connection? [conn]
   (instance? conn FDBDatabase))
