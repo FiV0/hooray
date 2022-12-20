@@ -4,6 +4,8 @@
   (:import (java.util Arrays)
            (java.nio ByteBuffer)))
 
+;; TODO use ByteBuffer slice and wrap to not copy anything and work with raw arrays
+
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
