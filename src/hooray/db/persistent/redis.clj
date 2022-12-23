@@ -56,6 +56,12 @@
   (byte-array (mapcat seq [(byte-array [exclusive-byte]) k])))
 
 (defn get-range
+  ([conn keyspace] (get-range conn keyspace Integer/MAX_VALUE))
+  ([conn keyspace limit]
+   (wcar conn
+         (->
+          (car/zrangebylex keyspace "-" "+" :limit 0 limit)
+          car/parse-raw)))
   ([conn keyspace start-k stop-k]
    (wcar conn
          (->
@@ -105,6 +111,12 @@
   (clear-db wcar-opts)
 
   ;; fix inclusive/exclusive
+  (->> (get-range wcar-opts :store)
+       (map ->value))
+
+  (->> (get-range wcar-opts :store 5)
+       (map ->value))
+
   (->> (get-range wcar-opts :store (->buffer "foo") (->buffer "foo2"))
        (map ->value))
 
@@ -129,6 +141,8 @@
   (delete-ks [this keyspace ks] (delete-ks conn keyspace ks))
   (upsert-ks [this ops] (upsert-ks conn ops))
   (get-k [this keyspace k] (get-k conn keyspace k))
+  (get-range [this keyspace] (get-range conn keyspace))
+  (get-range [this keyspace limit] (get-range conn keyspace limit))
   (get-range [this keyspace begin end] (get-range conn keyspace begin end))
   (get-range [this keyspace begin end limit] (get-range conn keyspace begin end limit))
   (seek [this keyspace prefix-k] (seek conn keyspace prefix-k))

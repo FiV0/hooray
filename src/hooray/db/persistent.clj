@@ -7,7 +7,6 @@
             [hooray.util :as util])
   (:import (java.io Closeable)))
 
-
 (defrecord PersistentDb [connection timestamp key-store doc-store]
   db/Database
   (as-of [this t] (util/unsupported-ex))

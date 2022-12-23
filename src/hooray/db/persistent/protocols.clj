@@ -41,6 +41,8 @@
   (upsert-ks [this ops])
   (get-k [this keyspace k])
   (get-range
+    [this keyspace]
+    [this keyspace limit]
     [this keyspace begin end]
     [this keyspace begin end limit])
   (seek
