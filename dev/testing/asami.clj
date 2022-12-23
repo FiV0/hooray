@@ -1,4 +1,4 @@
-(ns hooray.testing.asami
+(ns testing.asami
   (:require [clojure.edn :as edn]
             [asami.core :as d]))
 

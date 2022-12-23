@@ -34,15 +34,17 @@
  :aliases
  {:dev
   {:extra-paths ["dev" "examples"]
-   :extra-deps  {
-                 org.clojure/math.combinatorics {:mvn/version "0.1.6"}
+   :extra-deps  {org.clojure/math.combinatorics {:mvn/version "0.1.6"}
                  org.clojars.quoll/asami        {:mvn/version "2.3.0"}
+                 datalevin/datalevin            {:mvn/version "0.7.7"}
                  com.xtdb/xtdb-core             {:mvn/version "1.21.0"}
                  ;; {:local/root "../../xtdb/xtdb/core/"}
                  org.clojure/tools.namespace    {:mvn/version "1.1.0"}
                  com.lambdaisland/classpath     {:mvn/version "0.0.27"}
                  vvvvalvalval/scope-capture     {:mvn/version "0.3.3"}}
-   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"]}
+   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"
+              "--add-opens=java.base/java.nio=ALL-UNNAMED"
+              "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"]}
 
   :test
   {:extra-paths ["test"]

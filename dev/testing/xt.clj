@@ -1,4 +1,4 @@
-(ns hooray.testing.xt
+(ns testing.xt
   (:require [xtdb.api :as xt]
             [xtdb.query :as query]
             [clojure.edn :as edn]))
