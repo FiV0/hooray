@@ -55,5 +55,9 @@
   (db [this] "Returns the db of a connection.")
   (transact [this tx-data] "Submits a transaction to the database for writing."))
 
+;; TODO convenience for now, drop later or move to other protocol
+(defprotocol DropDB
+  (drop-db [this] "WARNING! Clears the db."))
+
 (defprotocol GraphDatabase
   (graph [this] "Returns the the underlying graph of the database"))

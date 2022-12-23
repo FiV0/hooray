@@ -57,7 +57,7 @@
         [eb ab vb] (map pack/->buffer [e a v])]
     [[:doc-store hea eb op] [:doc-store haa ab op] [:doc-store hva vb op]]))
 
-(defn transact* [{:keys [key-store doc-store] :as _conn} tx-data]
+(defn- transact* [{:keys [key-store doc-store] :as _conn} tx-data]
   (try
     (proto/upsert-ks key-store (mapcat create-key-store-txs tx-data))
     (proto/upsert-kvs doc-store (mapcat create-doc-store-txs tx-data))

@@ -1,9 +1,10 @@
 (ns hooray.db.persistent
   (:require [hooray.db :as db]
-            [hooray.util :as util]
+            [hooray.db.persistent.fdb :as fdb]
             [hooray.db.persistent.protocols :as proto]
             [hooray.db.persistent.redis :as redis]
-            [hooray.db.persistent.fdb :as fdb])
+            [hooray.db.persistent.transact :as transact]
+            [hooray.util :as util])
   (:import (java.io Closeable)))
 
 
@@ -25,18 +26,23 @@
    {:pre [(latest-or-date? timestamp)]}
    (->PersistentDb conn :lastest key-store doc-store)))
 
-(declare transact*)
-
 (defrecord PersistentConnection [name connection type key-store doc-store]
   db/Connection
   (get-name [this] name)
   (db [this] (->persistent-db connection :latest key-store doc-store))
-  (transact [this tx-data] (util/unsupported-ex))
+  (transact [this tx-data] (transact/transact connection tx-data))
 
   Closeable
   (close [_]
     (cond
       (redis/redis-connection? connection) (redis/close-connection connection)
+      (fdb/fdb-connection? connection) (fdb/close-connection connection)
+      :else (throw (ex-info "No such connection type known!" {:conn-type (type connection)}))))
+
+  db/DropDB
+  (drop-db [this]
+    (cond
+      (redis/redis-connection? connection) (redis/clear-db connection)
       (fdb/fdb-connection? connection) (fdb/close-connection connection)
       :else (throw (ex-info "No such connection type known!" {:conn-type (type connection)})))))
 
