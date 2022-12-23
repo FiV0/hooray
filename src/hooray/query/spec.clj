@@ -116,6 +116,15 @@
                     [?album :album/artist ?artist]
                     [?artist :artist/name ]
                     [_ :foo/bar]]
-                   :limit 12})
+                   :limit 12}))
 
-  )
+(s/def ::tuple (s/and (s/keys :req-un [::triple ::triple-order])
+                      (fn [{:keys [triple triple-order]}]
+                        (= (count triple) (count triple-order)))))
+
+(comment
+  (s/valid? ::tuple {:triple '[?e :foo/bar]
+                     :triple-order '[:e :a]})
+
+  (def tuple (s/conform ::tuple {:triple '[?e :foo/bar]
+                                 :triple-order '[:e :a]})))
