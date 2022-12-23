@@ -21,14 +21,15 @@
 (comment
   (-> (hash {}) int->bytes bytes->int))
 
+;; !important! this takes already hashes
 (defn pack-hash-array [& args]
   (let [len (* hash-length (count args))
         ba (byte-array len)]
-    (->> (map hash args)
-         (reduce (fn [i o]
-                   (System/arraycopy (int->bytes o) 0 ba i hash-length)
-                   (+ i hash-length))
-                 0))
+    (reduce (fn [i o]
+              (System/arraycopy (int->bytes o) 0 ba i hash-length)
+              (+ i hash-length))
+            0
+            args)
     ba))
 
 (defn unpack-hash-array [^"[B" b]
