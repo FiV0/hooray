@@ -19,7 +19,7 @@
   (query/query query (first inputs)))
 
 (defn db [conn]
-  {:pre [(instance? MemoryConnection conn)]}
+  #_{:pre [(instance? MemoryConnection conn)]}
   (db/db conn))
 
 ;;///////////////////////////////////////////////////////////////////////////////
@@ -90,4 +90,23 @@
                           :hello :world}
                          [:db/add 1 :foo :bar]])
   (transact redis-conn data)
-  )
+
+  (def results (time (q '{:find [?e ?a ?v]
+                          :where [[?e ?a ?v]]}
+                        (db redis-conn))))
+
+  (time (q '{:find [?t #_?album]
+             :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+                     ;; [?t :track/album ?album]
+                     ;; [?album :album/artist ?artist]
+                     ;; [?artist :artist/name ?name]
+                     ]}
+           (db redis-conn)))
+
+
+  (time (q '{:find [?name ?album]
+             :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
+                     [?t :track/album ?album]
+                     [?album :album/artist ?artist]
+                     [?artist :artist/name ?name]]}
+           (db redis-conn))))

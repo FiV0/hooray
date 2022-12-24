@@ -18,7 +18,7 @@
   (graph [this] graph))
 
 (defn- latest-or-date? [timestamp]
-  (or (= :lastest timestamp)
+  (or (= :latest timestamp)
       (instance? java.util.Date timestamp)))
 
 ;; :latest is going to have a special meaning in the context of a db

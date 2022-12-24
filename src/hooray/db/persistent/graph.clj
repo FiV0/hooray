@@ -6,7 +6,7 @@
             [hooray.query.spec :as h-spec]
             [hooray.util :as util]))
 
-(declare get-from-index*)
+(declare get-from-index)
 
 (defrecord PersistentGraph [connection key-store doc-store]
   g/Graph
@@ -18,8 +18,12 @@
   (transact [this _tx-data] (util/unsupported-ex))
   (transact [this _tx-data _ts] (util/unsupported-ex))
 
-  (resolve-triple [this triple] (get-from-index* (:key-store connection)
-                                                 triple))
+  ;; the memory use hash join doesn't hash anything
+  ;; so we need to hash here
+  ;; Should we add a dummy hash fn for in momory to decomplect things?
+  (resolve-triple [this triple] (->> (get-from-index key-store triple)
+                                     (map (fn [triple-bytes] (->> (proto/get-kvs doc-store :doc-store triple-bytes)
+                                                                  (mapv pack/->value))))))
   (resolve-triple [this _triple _ts] (util/unsupported-ex))
 
   g/GraphIndex
@@ -35,42 +39,45 @@
 ;; TODO optimize for not returning constant columns
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
 
-(defmulti get-from-index (fn [key-store binding] (simplify binding)))
+(defmulti get-from-index (fn [_key-store binding] (simplify binding)))
 
 (defmethod get-from-index '[? ? ?]
   [key-store [_ _ _]]
-  (proto/get-range key-store :eav))
+  (->> (proto/get-range key-store :eav)
+       (map pack/unpack-hash-array*)))
 
 (defmethod get-from-index '[? ? :v]
   [key-store [_ _ v]]
-  (proto/seek key-store :vea (pack/pack-hash-array v)))
+  (->> (proto/seek key-store :vea (pack/pack-hash-array (pack/hash v)))
+       (map (comp #(subvec % 1) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[? :v ?]
   [key-store [_ a _]]
-  (proto/seek key-store :aev (pack/pack-hash-array a)))
+  (->> (proto/seek key-store :aev (pack/pack-hash-array (pack/hash a)))
+       (map (comp #(subvec % 1) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[:v ? ?]
   [key-store [e _ _]]
-  (proto/seek key-store :eav (pack/pack-hash-array e)))
+  (->> (proto/seek key-store :eav (pack/pack-hash-array (pack/hash e)))
+       (map (comp #(subvec % 1) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[? :v :v]
   [key-store [_ a v]]
-  (proto/seek key-store :ave (pack/pack-hash-array a v)))
+  (->> (proto/seek key-store :ave (pack/pack-hash-array (pack/hash a) (pack/hash v)))
+       (map (comp #(subvec % 2) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[:v ? :v]
   [key-store [e _ v]]
-  (proto/seek key-store :eva (pack/pack-hash-array e v)))
+  (->> (proto/seek key-store :eva (pack/pack-hash-array (pack/hash e) (pack/hash v)))
+       (map (comp #(subvec % 2) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[:v :v ?]
   [key-store [e a _]]
-  (proto/seek key-store :eav (pack/pack-hash-array e a)))
+  (->> (proto/seek key-store :eav (pack/pack-hash-array (pack/hash e) (pack/hash a)))
+       (map (comp #(subvec % 2) pack/unpack-hash-array*))))
 
 (defmethod get-from-index '[:v :v :v]
   [key-store [e a v]]
-  (if (proto/get-k key-store :eav (pack/pack-hash-array e a v))
+  (if (proto/get-k key-store :eav (pack/pack-hash-array (pack/hash e) (pack/hash a) (pack/hash v)))
     [[]]
     []))
-
-(defn get-from-index* [key-store binding]
-  (->> (get-from-index key-store binding)
-       (map pack/unpack-hash-array)))

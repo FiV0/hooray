@@ -32,17 +32,30 @@
             args)
     ba))
 
-(defn unpack-hash-array [^"[B" b]
+(defn unpack-hash-array
+  "version that also converts to comparable hashes."
+  [^"[B" b]
   (loop [res [] i 0]
     (if (< i (count b))
       (let [new-i (+ i hash-length)]
         (recur (conj res (bytes->int (Arrays/copyOfRange b i new-i))) new-i))
       res)))
 
+(defn unpack-hash-array*
+  "version that keeps raw byte arrays"
+  [^"[B" b]
+  (loop [res [] i 0]
+    (if (< i (count b))
+      (let [new-i (+ i hash-length)]
+        (recur (conj res (Arrays/copyOfRange b i new-i)) new-i))
+      res)))
+
 (comment
   (def some-values [{} 1 3])
   (map hash some-values)
   ;; => (-15128758 1392991556 -1556392013)
-  (-> (apply pack-hash-array some-values)
-      unpack-hash-array)
+  (->>
+   (map hash some-values)
+   (apply pack-hash-array )
+   unpack-hash-array)
   )
