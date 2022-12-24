@@ -3,10 +3,10 @@
 ;; The idea is to have either a connection string or a config-map
 ;; Redis as an example
 (comment
-  {:type :redis
+  {:sub-type :redis
    :spec {:uri "redis://localhost:6379/"}})
 
-(defmulti config-map->conn (fn [config-map] (:type config-map)))
+(defmulti config-map->conn (fn [config-map] (:sub-type config-map)))
 
 (defmethod config-map->conn :default [config-map]
   (throw (ex-info "Unkown connection type!" {:config-map config-map})))

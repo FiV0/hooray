@@ -1,6 +1,7 @@
 (ns hooray.db
-  (:require [clojure.string :as str]
-            [clojure.core.match :refer [match]]))
+  (:require [clojure.core.match :refer [match]]
+            [clojure.spec.alpha :as s]
+            [clojure.string :as str]))
 
 (defn valid-db-type? [{:keys [type sub-type algo]}]
   (match [type sub-type algo]
@@ -15,6 +16,43 @@
     [:mem :tonsky :generic] true
     :else false))
 
+;; redis
+(s/def :redis/uri string?)
+(s/def :redis/spec (s/keys :req-un [:redis/uri]))
+(s/def :redis/config (s/keys :req-un [:redis/spec]))
+
+;; fdb
+(s/def :fdb/cluster-file string?)
+(s/def :fdb/spec (s/keys :req-un [:fdb/cluster-file]))
+(s/def :fdb/config (s/keys :req-un [:fdb/spec]))
+
+(defn- valid-per-uri-map? [{:keys [sub-type] :as uri-map}]
+  (case sub-type
+    :redis (s/valid? :redis/config uri-map)
+    :fdb (s/valid? :fdb/config uri-map)
+    true))
+
+;; general
+(s/def ::name string?)
+(s/def ::algo #{nil :hash :leapfrog :generic})
+(s/def ::sub-type #{nil :core :avl :tonsky :redis :fdb})
+(s/def ::type #{:mem :per})
+(s/def ::uri-map (s/and (s/keys :req-un [::type ::sub-type ::algo ::name])
+                        valid-per-uri-map?))
+
+(comment
+  (s/valid? ::uri-map {:type :mem
+                       :sub-type :avl
+                       :name "hello"
+                       :algo :leapfrog})
+
+  (s/valid? ::uri-map {:type :per
+                       :sub-type :redis
+                       :name "hello"
+                       :algo :hash
+                       :spec {:uri "redis://localhost:6379/"}}))
+
+
 ;; copied from asami
 (defn parse-uri
   "Splits up a database URI string into structured parts"
@@ -26,7 +64,7 @@
                      :sub-type (if (str/blank? sub-type) nil (keyword sub-type))
                      :algo (if (str/blank? algo) nil (keyword (subs algo 1)))
                      :name db-name}]
-        (if (valid-db-type? uri-map)
+        (if (and (valid-db-type? uri-map) (s/valid? ::uri-map uri-map))
           uri-map
           (throw (ex-info "Database type currently not supported!" {:uri-map uri-map}))))
       (throw (ex-info (str "Invalid URI: " uri) {:uri uri})))))

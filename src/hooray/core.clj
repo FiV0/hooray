@@ -22,6 +22,12 @@
   {:pre [(instance? MemoryConnection conn)]}
   (db/db conn))
 
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                   in-momory
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
 (comment
   (require '[clojure.edn :as edn]
            '[hooray.util :as util])
@@ -63,3 +69,25 @@
                      [?t :track/album ?album]
                      [?t :track/name ?track-name]]}
            (db-generic))))
+
+
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                     redis
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+(comment
+  (def config-map {:type :per
+                   :sub-type :redis
+                   :name "hello"
+                   :algo :hash
+                   :spec {:uri "redis://localhost:6379/"}})
+
+  (def redis-conn (connect config-map))
+  (def data (edn/read-string (slurp "resources/transactions.edn")))
+  (transact redis-conn  [{:db/id 0
+                          :hello :world}
+                         [:db/add 1 :foo :bar]])
+  (transact redis-conn data)
+  )

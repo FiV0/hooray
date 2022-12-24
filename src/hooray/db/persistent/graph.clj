@@ -8,7 +8,7 @@
 
 (declare get-from-index*)
 
-(defrecord PersistentGraph [connection]
+(defrecord PersistentGraph [connection key-store doc-store]
   g/Graph
   (new-graph [this] (util/unsupported-ex))
   (new-graph [this _opts] (util/unsupported-ex))
@@ -29,6 +29,8 @@
   (get-iterator [this _tuple] (util/unsupported-ex))
   (get-iterator [this _tuple _type] (util/unsupported-ex)))
 
+(defn ->persistent-graph [conn key-store doc-store]
+  (->PersistentGraph conn key-store doc-store))
 
 ;; TODO optimize for not returning constant columns
 (defn simplify [binding] (map #(if (util/variable? %) '? :v) binding))
