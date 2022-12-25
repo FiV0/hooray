@@ -46,7 +46,7 @@
 
  :aliases
  {:dev
-  {:extra-paths ["dev" "examples"]
+  {:extra-paths ["dev"]
    :extra-deps  {org.clojars.quoll/asami        {:mvn/version "2.3.0"}
                  datalevin/datalevin            {:mvn/version "0.7.7"}
                  com.xtdb/xtdb-core             {:mvn/version "1.21.0"}
