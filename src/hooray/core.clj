@@ -78,7 +78,8 @@
 ;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 (comment
-  (require '[clojure.edn :as edn])
+  (require '[clojure.edn :as edn]
+           '[hooray.graph-gen :as g-gen])
 
   (def config-map {:type :per
                    :sub-type :redis
@@ -103,4 +104,19 @@
                      [?t :track/album ?album]
                      [?album :album/artist ?artist]
                      [?artist :artist/name ?name]]}
-           (db redis-conn))))
+           (db redis-conn)))
+
+
+  (def random-graph (g-gen/random-graph 100 0.3))
+  (transact redis-conn (g-gen/graph->ops random-graph))
+  (transact conn (g-gen/graph->ops random-graph))
+
+  (def triangle-query '{:find [?a ?b ?c]
+                        :where [[?a :g/to ?b]
+                                [?a :g/to ?c]
+                                [?b :g/to ?c]]})
+
+  (time (count (q triangle-query (db redis-conn))))
+  (time (count (q triangle-query (db conn))))
+
+  )
