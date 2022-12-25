@@ -78,6 +78,8 @@
 ;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 (comment
+  (require '[clojure.edn :as edn])
+
   (def config-map {:type :per
                    :sub-type :redis
                    :name "hello"
@@ -94,15 +96,6 @@
   (def results (time (q '{:find [?e ?a ?v]
                           :where [[?e ?a ?v]]}
                         (db redis-conn))))
-
-  (time (q '{:find [?t #_?album]
-             :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
-                     ;; [?t :track/album ?album]
-                     ;; [?album :album/artist ?artist]
-                     ;; [?artist :artist/name ?name]
-                     ]}
-           (db redis-conn)))
-
 
   (time (q '{:find [?name ?album]
              :where [[?t :track/name "For Those About To Rock (We Salute You)" ]

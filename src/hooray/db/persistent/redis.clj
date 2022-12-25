@@ -57,7 +57,12 @@
   (byte-array (mapcat seq [(byte-array [exclusive-byte]) k])))
 
 (defn get-range
-  ([conn keyspace] (get-range conn keyspace Integer/MAX_VALUE))
+  ([conn keyspace]
+   (wcar conn
+         (->
+          (car/zrangebylex keyspace "-" "+" #_#_#_:limit 0 limit)
+          car/parse-raw))
+   #_(get-range conn keyspace Integer/MAX_VALUE))
   #_([conn keyspace limit]
      (wcar conn
            (->

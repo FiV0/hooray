@@ -79,6 +79,6 @@
   ;; => (-15128758 1392991556 -1556392013)
   (->>
    (map hash some-values)
-   (apply pack-hash-array )
+   (apply pack-hash-array)
    unpack-hash-array)
   )
