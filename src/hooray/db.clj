@@ -34,13 +34,14 @@
 
 ;; general
 (s/def ::name string?)
-(s/def ::algo #{nil :hash :leapfrog :generic})
-(s/def ::sub-type #{nil :core :avl :tonsky :redis :fdb})
+(s/def ::algo (s/nilable #{:hash :leapfrog :generic}))
+(s/def ::sub-type (s/nilable #{:core :avl :tonsky :redis :fdb}))
 (s/def ::type #{:mem :per})
 (s/def ::uri-map (s/and (s/keys :req-un [::type ::sub-type ::algo ::name])
                         valid-per-uri-map?))
 
 (comment
+  (s/valid? ::uri-map {:type :mem, :sub-type nil, :algo nil, :name "data"})
   (s/valid? ::uri-map {:type :mem
                        :sub-type :avl
                        :name "hello"
@@ -51,7 +52,6 @@
                        :name "hello"
                        :algo :hash
                        :spec {:uri "redis://localhost:6379/"}}))
-
 
 ;; copied from asami
 (defn parse-uri
