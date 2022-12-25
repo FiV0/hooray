@@ -182,7 +182,8 @@
   (wcar conn (-> (car/hget keyspace (car/raw k)) car/parse-raw)))
 
 (defn get-kvs [conn keyspace ks]
-  (wcar conn (-> (apply car/hmget keyspace (map car/raw ks)) car/parse-raw)))
+  (when (seq ks)
+    (wcar conn (-> (apply car/hmget keyspace (map car/raw ks)) car/parse-raw))))
 
 (defn delete-kv [conn keyspace k]
   (wcar conn (car/hdel keyspace (car/raw k))))
