@@ -87,11 +87,12 @@
                    :spec {:uri "redis://localhost:6379/"}})
 
   (def redis-conn (connect config-map))
+  (db/drop-db redis-conn)
   (def data (edn/read-string (slurp "resources/transactions.edn")))
   (transact redis-conn  [{:db/id 0
                           :hello :world}
                          [:db/add 1 :foo :bar]])
-  (transact redis-conn data)
+  (time (transact redis-conn data))
 
   (def results (time (q '{:find [?e ?a ?v]
                           :where [[?e ?a ?v]]}
