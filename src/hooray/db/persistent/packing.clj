@@ -5,6 +5,7 @@
            (java.nio ByteBuffer)))
 
 ;; TODO use ByteBuffer slice and wrap to not copy anything and work with raw arrays
+;; TODO look at https://gist.github.com/pingles/1235344 for inspiration
 
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
@@ -20,6 +21,28 @@
 
 (comment
   (-> (hash {}) int->bytes bytes->int))
+
+;; LOOK for more efficient implementation
+(defn inc-ba
+  ([^"[B" b] (inc-ba b (dec (count b))))
+  ([^"[B" b idx]
+   (let [val (aget b idx)]
+     (cond (and (= 0 idx) (= val Byte/MAX_VALUE))
+           (throw (ex-info "Byte Array overflow!" {}))
+           (< val Byte/MAX_VALUE)
+           (do
+             (aset-byte b idx (byte (inc val)))
+             b)
+           :else
+           (do
+             (aset-byte b idx (byte 0))
+             (recur b (dec idx)))))))
+
+(comment
+  (-> 1 int->bytes bump-ba  bytes->int)
+  (-> 127 int->bytes vec)
+  (-> (byte-array [0 0 0 127]) bump-ba vec)
+  (-> (byte-array [0 0 0 127]) bump-ba bytes->int))
 
 ;; !important! this takes already hashes
 (defn pack-hash-array [& args]

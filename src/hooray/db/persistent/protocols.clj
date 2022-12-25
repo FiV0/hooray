@@ -42,7 +42,7 @@
   (get-k [this keyspace k])
   (get-range
     [this keyspace]
-    [this keyspace limit]
+    [this keyspace prefix-k]
     [this keyspace begin end]
     [this keyspace begin end limit])
   (seek

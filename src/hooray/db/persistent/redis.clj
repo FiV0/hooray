@@ -1,6 +1,7 @@
 (ns hooray.db.persistent.redis
   (:require [clojure.string :as str]
             [hooray.db.persistent.protocols :as per]
+            [hooray.db.persistent.packing :as pack]
             [taoensso.carmine :as car :refer [wcar]]
             [taoensso.nippy :as nippy])
   (:import (taoensso.carmine.connections ConnectionPool)))
@@ -57,10 +58,15 @@
 
 (defn get-range
   ([conn keyspace] (get-range conn keyspace Integer/MAX_VALUE))
-  ([conn keyspace limit]
+  #_([conn keyspace limit]
+     (wcar conn
+           (->
+            (car/zrangebylex keyspace "-" "+" :limit 0 limit)
+            car/parse-raw)))
+  ([conn keyspace prefix-k]
    (wcar conn
          (->
-          (car/zrangebylex keyspace "-" "+" :limit 0 limit)
+          (car/zrangebylex keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba prefix-k))))
           car/parse-raw)))
   ([conn keyspace start-k stop-k]
    (wcar conn
@@ -110,11 +116,16 @@
   (clear-set wcar-opts :store)
   (clear-db wcar-opts)
 
+  (set-ks wcar-opts :store (map #(apply pack/pack-hash-array %) [[1 2] [1 3]]))
+
+  (->> (get-range wcar-opts :store (pack/pack-hash-array 1))
+       (map pack/unpack-hash-array))
+
   ;; fix inclusive/exclusive
   (->> (get-range wcar-opts :store)
        (map ->value))
 
-  (->> (get-range wcar-opts :store 5)
+  (->> (get-range wcar-opts :store (->buffer "foo"))
        (map ->value))
 
   (->> (get-range wcar-opts :store (->buffer "foo") (->buffer "foo2"))
@@ -142,7 +153,7 @@
   (upsert-ks [this ops] (upsert-ks conn ops))
   (get-k [this keyspace k] (get-k conn keyspace k))
   (get-range [this keyspace] (get-range conn keyspace))
-  (get-range [this keyspace limit] (get-range conn keyspace limit))
+  (get-range [this keyspace prefix-k] (get-range conn keyspace prefix-k))
   (get-range [this keyspace begin end] (get-range conn keyspace begin end))
   (get-range [this keyspace begin end limit] (get-range conn keyspace begin end limit))
   (seek [this keyspace prefix-k] (seek conn keyspace prefix-k))
