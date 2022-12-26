@@ -97,8 +97,10 @@
              car/parse-raw))))
 
 (defn count-ks
-  ([conn keyspace] (wcar conn (car/zcard keyspace)))
-  ([conn keyspace prefix-k] (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key prefix-k)) "+")))
+  ([conn keyspace]
+   (wcar conn (car/zcard keyspace)))
+  ([conn keyspace prefix-k]
+   (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba prefix-k))))))
   ([conn keyspace start-k stop-k]
    (wcar conn (car/zlexcount keyspace (car/raw (inclusive-key start-k)) (car/raw (exclusive-key stop-k))))))
 
