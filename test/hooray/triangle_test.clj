@@ -1,8 +1,8 @@
 (ns hooray.triangle-test
   (:require [clojure.edn :as edn]
             [clojure.test :refer [deftest testing is] :as t]
-            [hooray.fixtures :as fix :refer [*conn*]]
             [hooray.core :as h]
+            [hooray.fixtures :as fix :refer [*conn*]]
             [hooray.graph-gen :as g]))
 
 (def triangle-query '{:find [?a ?b ?c]

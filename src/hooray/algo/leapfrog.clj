@@ -2,6 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
+            [hooray.db.iterator :as itr]
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
@@ -23,18 +24,18 @@
   (def q-conformed (s/conform ::h-spec/query q)))
 
 (defn- iterator-key [iterators p]
-  (g-index/key (nth iterators p)))
+  (itr/key (nth iterators p)))
 
 (defn- iterator-next [iterators p]
   {:pre [(vector? iterators)]}
-  (update iterators p g-index/next))
+  (update iterators p itr/next))
 
 (defn- iterator-seek [iterators p x]
   {:pre [(vector? iterators)]}
-  (update iterators p #(g-index/seek % x)))
+  (update iterators p #(itr/seek % x)))
 
 (defn- iterator-end? [iterators p]
-  (g-index/at-end? (nth iterators p)))
+  (itr/at-end? (nth iterators p)))
 
 (defn- lookup-row [graph row]
   (mapv #(g-index/hash->value graph %) row))
@@ -98,7 +99,7 @@
 
 (defn- iterators-sorted? [{:keys [iterators position]}]
   (let [heads (->> (concat (drop position iterators) (take position iterators))
-                   (map g-index/key))]
+                   (map itr/key))]
     (= heads (sort heads))))
 
 (s/def ::iterators (s/and (s/keys :req-un [:leap/iterators :leap/position])
@@ -107,7 +108,7 @@
 (defrecord Iterators [iterators position])
 
 (defn ->iterators [iterators]
-  (->Iterators (vec (sort-by #(g-index/key %) iterators)) 0))
+  (->Iterators (vec (sort-by #(itr/key %) iterators)) 0))
 
 (s/fdef var->iterators :args (s/cat :var util/variable?
                                     :partial-row (s/and vector? (s/* int?))

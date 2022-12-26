@@ -5,10 +5,11 @@
             [clojure.spec.alpha :as s]
             [clojure.tools.logging :as log]
             [hooray.datom :as datom]
-            [hooray.util.avl :as avl-util]
+            [hooray.db.iterator :as itr]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util :refer [dissoc-in]]
+            [hooray.util.avl :as avl-util]
             [hooray.util.persistent-map :as tonsky-map]
             [me.tonsky.persistent-sorted-set :as tonsky-set])
   (:import (me.tonsky.persistent_sorted_set Seq)))
@@ -366,30 +367,14 @@
 ;; FIXME maybe do a stateful and non-stateful version
 ;; TODO think about if next should go one level up
 
-(defprotocol LeapIterator
-  (key [this])
-  (next [this])
-  (seek [this k])
-  (at-end? [this]))
-
-(s/def :leap/iterator #(satisfies? LeapIterator %))
-
-(defprotocol LeapLevels
-  (open [this])
-  (up [this])
-  (level [this])
-  (depth [this]))
-
-(s/def :leap/levels #(satisfies? LeapLevels %))
-
 (defn leap-iterator? [itr]
-  (and (satisfies? LeapIterator itr) (satisfies? LeapLevels itr)))
+  (and (satisfies? itr/LeapIterator itr) (satisfies? itr/LeapLevels itr)))
 
 (defn pop-empty [v]
   (if (seq v) (pop v) nil))
 
 (defrecord SimpleIterator [data prefix depth max-depth end?]
-  LeapIterator
+  itr/LeapIterator
   (key [this]
     (when-not end?
       (nth (first data) depth)))
@@ -413,7 +398,7 @@
     #_(or (empty? (rest data)) (<= (compare prefix (subvec (second data) 0 (count prefix))) -1))
     (or end? (empty? data) (<= (compare prefix (subvec (first data) 0 (count prefix))) -1)))
 
-  LeapLevels
+  itr/LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
     (->SimpleIterator data (conj prefix (nth (first data) depth)) (inc depth) max-depth false))
@@ -466,11 +451,11 @@
 ;; TODO integrate first-key/key-fn into iterators, maybe remove levels
 
 (defrecord LeapIteratorCore [index stack depth max-depth]
-  LeapIterator
+  itr/LeapIterator
   (key [this] (first-key index))
 
   (next [this]
-    (if-not (at-end? this)
+    (if-not (itr/at-end? this)
       (with-meta (->LeapIteratorCore (subvec index 1) stack depth max-depth) (meta this))
       this))
 
@@ -481,7 +466,7 @@
 
   (at-end? [this] (empty? index))
 
-  LeapLevels
+  itr/LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
     (with-meta (->LeapIteratorCore (-> index first second vec) (conj stack index) (inc depth) max-depth)
@@ -505,7 +490,7 @@
     (with-meta itr-core {:original-itr #(->leap-iterator-core index max-depth)})))
 
 (defrecord LeapIteratorAVL [index stack depth max-depth]
-  LeapIterator
+  itr/LeapIterator
   (key [this] (first-key index))
 
   (next [this]
@@ -519,7 +504,7 @@
 
   (at-end? [this] (empty? index))
 
-  LeapLevels
+  itr/LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
     (with-meta (->LeapIteratorAVL (-> index first second seq) (conj stack index) (inc depth) max-depth)
@@ -549,7 +534,7 @@
     (with-meta avl-itr {:original-itr #(->leap-iterator-avl index max-depth)})))
 
 (defrecord LeapIteratorTonsky [index stack depth max-depth]
-  LeapIterator
+  itr/LeapIterator
   (key [this] (first-key index))
 
   (next [this]
@@ -563,7 +548,7 @@
 
   (at-end? [this] (empty? index))
 
-  LeapLevels
+  itr/LeapLevels
   (open [this]
     (assert (< (inc depth) max-depth))
     (with-meta (->LeapIteratorTonsky (-> index first second seq) (conj stack index) (inc depth) max-depth)
@@ -627,12 +612,3 @@
       :avl (->leap-iterator-avl (get-index graph tuple) nb-vars)
       :tonsky (->leap-iterator-tonsky (get-index graph tuple) nb-vars)
       (throw (ex-info "todo" {})))))
-
-(defn set-iterator-level [itr l]
-  {:pre [(and (<= 0 l) (< l (depth itr)))]}
-  (cond (< l (level itr)) (set-iterator-level (open itr) l)
-        (> l (level itr)) (set-iterator-level (up itr) l)
-        :else itr))
-
-(defn reset-iterator [itr]
-  (set-iterator-level itr 0))
