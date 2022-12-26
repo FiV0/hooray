@@ -73,6 +73,13 @@
         (recur (conj res (Arrays/copyOfRange b i new-i)) new-i))
       res)))
 
+(defn concat-ba [^"[B" b1 ^"[B" b2]
+  (let [len (+ (count b1) (count b2))
+        res (byte-array len)]
+    (System/arraycopy b1 0 res 0 (count b1))
+    (System/arraycopy b2 0 res (count b1) len)
+    res))
+
 (comment
   (def some-values [{} 1 3])
   (map hash some-values)

@@ -92,7 +92,7 @@
              car/parse-raw)))
   ([conn keyspace prefix-k limit]
    (wcar conn
-         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) "+" "BYLEX"
+         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba prefix-k))) "BYLEX"
                          :limit 0 limit)
              car/parse-raw))))
 

@@ -17,3 +17,8 @@
   (depth [this]))
 
 (s/def :leap/levels #(satisfies? LeapLevels %))
+
+(defprotocol IteratorCount
+  (count* [this]))
+
+(s/def :itr/count #(satisfies? IteratorCount %))
