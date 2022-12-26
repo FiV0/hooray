@@ -8,6 +8,7 @@
             [hooray.db.memory.graph-index :as mem-gi]
             [hooray.fixtures :as fix]
             [hooray.graph :as g]
+            [hooray.db.iterator :as itr]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util :refer [dissoc-in]])
   (:import (hooray.db.memory.graph_index SimpleIterator LeapIteratorCore LeapIteratorAVL)))
@@ -45,10 +46,10 @@
   (def it (g/get-iterator g tuple-3-vars :simple))
 
   (loop [res {} it it]
-    (let [level (mem-gi/level it)]
+    (let [level (itr/level it)]
       (if (= -1 level)
         res
-        (recur (update res level (fnil conj []) (mem-gi/key it))
+        (recur (update res level (fnil conj []) (itr/key it))
                (move-to-next it)))))
 
   )
@@ -65,21 +66,21 @@
          (g/transact tx-data)))))
 
 (defn- move-up [it]
-  (if (and (mem-gi/at-end? it) (pos? (mem-gi/level it)))
-    (move-up (mem-gi/next (mem-gi/up it)))
+  (if (and (itr/at-end? it) (pos? (itr/level it)))
+    (move-up (itr/next (itr/up it)))
     it))
 
 (defn- move-to-next [it]
-  (let [level (mem-gi/level it)]
-    (cond (mem-gi/at-end? it)
+  (let [level (itr/level it)]
+    (cond (itr/at-end? it)
           (move-up it)
 
-          (< (inc level) (mem-gi/depth it))
-          (mem-gi/open it)
+          (< (inc level) (itr/depth it))
+          (itr/open it)
 
           :else
-          (let [it (mem-gi/next it)]
-            (if (mem-gi/at-end? it)
+          (let [it (itr/next it)]
+            (if (itr/at-end? it)
               (move-to-next it)
               it)))))
 
@@ -94,22 +95,22 @@
             tgraph (-> (mem-gi/memory-graph {:type (it-type->ds-type it-type)})
                        (g/transact tdata))
             it (g/get-iterator tgraph tuple-3-vars it-type)]
-        (is (false? (mem-gi/at-end? it)))
-        (is (= 1 (mem-gi/key it) ))
-        (is (false? (-> it mem-gi/open mem-gi/at-end?)))
-        (is (= 2 (-> it mem-gi/open mem-gi/key)))
-        (is (false? (-> it mem-gi/open mem-gi/open mem-gi/at-end?)))
-        (is (= 3 (-> it mem-gi/open mem-gi/open mem-gi/key)))
-        (is (true? (-> it mem-gi/open mem-gi/open mem-gi/next mem-gi/at-end?)))
-        (is (true? (-> it mem-gi/open mem-gi/open mem-gi/next mem-gi/up mem-gi/next mem-gi/at-end?)))
-        (is (true? (-> it mem-gi/open mem-gi/open mem-gi/next mem-gi/up mem-gi/next
-                       mem-gi/up mem-gi/next mem-gi/at-end?)))
-        (is (false? (-> it (mem-gi/seek 1) mem-gi/at-end?)))
-        (is (true? (-> it (mem-gi/seek 2) mem-gi/at-end?)))
-        (is (false? (-> it mem-gi/open (mem-gi/seek 2) mem-gi/at-end?)))
-        (is (true? (-> it mem-gi/open (mem-gi/seek 3) mem-gi/at-end?)))
-        (is (false? (-> it mem-gi/open mem-gi/open (mem-gi/seek 3) mem-gi/at-end?)))
-        (is (true? (-> it mem-gi/open mem-gi/open (mem-gi/seek 4) mem-gi/at-end?)))))))
+        (is (false? (itr/at-end? it)))
+        (is (= 1 (itr/key it) ))
+        (is (false? (-> it itr/open itr/at-end?)))
+        (is (= 2 (-> it itr/open itr/key)))
+        (is (false? (-> it itr/open itr/open itr/at-end?)))
+        (is (= 3 (-> it itr/open itr/open itr/key)))
+        (is (true? (-> it itr/open itr/open itr/next itr/at-end?)))
+        (is (true? (-> it itr/open itr/open itr/next itr/up itr/next itr/at-end?)))
+        (is (true? (-> it itr/open itr/open itr/next itr/up itr/next
+                       itr/up itr/next itr/at-end?)))
+        (is (false? (-> it (itr/seek 1) itr/at-end?)))
+        (is (true? (-> it (itr/seek 2) itr/at-end?)))
+        (is (false? (-> it itr/open (itr/seek 2) itr/at-end?)))
+        (is (true? (-> it itr/open (itr/seek 3) itr/at-end?)))
+        (is (false? (-> it itr/open itr/open (itr/seek 3) itr/at-end?)))
+        (is (true? (-> it itr/open itr/open (itr/seek 4) itr/at-end?)))))))
 
 (comment
   (require '[clojure.data.avl :as avl])
@@ -117,13 +118,13 @@
         tgraph (-> (mem-gi/memory-graph {:type :tonsky})
                    (g/transact tdata))
         it (g/get-iterator tgraph tuple-3-vars :tonsky)]
-    (-> it mem-gi/open :index type #_(mem-gi/seek 2))
+    (-> it itr/open :index type #_(itr/seek 2))
     ;; (-> it :index (avl/seek 1))
     )
   )
 
 (defn- finished? [it]
-  (and (= (mem-gi/level it) 0) (mem-gi/at-end? it)))
+  (and (= (itr/level it) 0) (itr/at-end? it)))
 
 (deftest iteration-test-iterator
   (testing "correctness of iterator implementations"
@@ -134,7 +135,7 @@
             it-index->data (loop [res {} it it]
                              (if (finished? it)
                                res
-                               (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                               (recur (update res (itr/level it) (fnil conj []) (itr/key it))
                                       (move-to-next it))))]
         (is (= (get it-index->data 0) (map first tdata)))
         (is (= (get it-index->data 1) (map second tdata)))
@@ -160,12 +161,12 @@
             it-index->data (loop [res {} it it]
                              (if (finished? it)
                                res
-                               (let [_ (assert (mem-gi/key it))
-                                     seek-target (rand-int (mem-gi/key it) (min (+ (mem-gi/key it) 3) size))
-                                     it (mem-gi/seek it seek-target)
-                                     k (mem-gi/key it)]
+                               (let [_ (assert (itr/key it))
+                                     seek-target (rand-int (itr/key it) (min (+ (itr/key it) 3) size))
+                                     it (itr/seek it seek-target)
+                                     k (itr/key it)]
                                  (if k
-                                   (recur (update res (mem-gi/level it) (fnil conj []) k)
+                                   (recur (update res (itr/level it) (fnil conj []) k)
                                           (move-to-next it))
                                    (recur res
                                           (move-to-next it))))))]
@@ -184,8 +185,8 @@
             tgraph (test-graph tdata (it-type->ds-type it-type))
             it (g/get-iterator tgraph tuple-with-literals it-type)
             it-index->data (loop [res {} it it]
-                             (if (mem-gi/at-end? it)
+                             (if (itr/at-end? it)
                                res
-                               (recur (update res (mem-gi/level it) (fnil conj []) (mem-gi/key it))
+                               (recur (update res (itr/level it) (fnil conj []) (itr/key it))
                                       (move-to-next it))))]
         (is (= #{1 2 3} (into #{} (get it-index->data 0))))))))

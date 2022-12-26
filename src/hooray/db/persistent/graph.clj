@@ -5,8 +5,7 @@
             [hooray.db.persistent.protocols :as proto]
             [hooray.graph :as g]
             [hooray.query.spec :as h-spec]
-            [hooray.util :as util])
-  (:import (clojure.lang Counted)))
+            [hooray.util :as util]))
 
 (declare get-from-index)
 
