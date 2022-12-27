@@ -1,4 +1,4 @@
-;; This file initially contained big parts copied from XTDB
+;; This file initially contained some parts copied from XTDB
 ;; Copyright © 2018-2022 JUXT LTD.
 
 (ns hooray.query.spec

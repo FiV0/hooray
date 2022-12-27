@@ -1,12 +1,14 @@
 (ns hooray.fixtures
-  (:require [clojure.test :as test :refer [testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.test :as test :refer [testing]]
             [clojure.tools.logging :as log]
-            [clojure.edn :as edn]
             [hooray.core :as hooray]
             [hooray.db :as db]
-            [hooray.graph :as g]
             [hooray.db.memory.graph-index :as mem-gi]
-            [hooray.util :as util]))
+            [hooray.db.persistent.redis :as redis]
+            [hooray.graph :as g]
+            [hooray.util :as util]
+            [taoensso.carmine :as car]))
 
 (def ^:dynamic *conn* nil)
 (def ^:dynamic *graph* nil)
@@ -97,3 +99,33 @@
 (defn with-println [f]
   (f)
   (println))
+
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                     Redis
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+(defonce ^:prviate my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
+(def ^:private     my-conn-spec-1 {:uri "redis://localhost:6379/"})
+
+(def ^:private redis-conn {:pool my-conn-pool :spec my-conn-spec-1})
+
+(def ^:dynamic *keyspace* nil)
+(def ^:dynamic *key-store* nil)
+
+;; copied from clj_fdb
+(let [alphabet (vec "abcdefghijklmnopqrstuvwxyz0123456789")]
+  (defn rand-str
+    "Generate a random string of length l"
+    [l]
+    (loop [n l res (transient [])]
+      (if (zero? n)
+        (apply str (persistent! res))
+        (recur (dec n) (conj! res (alphabet (rand-int 36))))))))
+
+(defn with-redis-keyspace [f]
+  (binding [*keyspace* (str "test-keyspace" (rand-str 5))
+            *key-store* (redis/->redis-key-store redis-conn)]
+    (f)
+    (redis/clear-set redis-conn *keyspace*)))
