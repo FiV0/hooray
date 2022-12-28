@@ -56,6 +56,9 @@
 (defn- exclusive-key [k]
   (byte-array (mapcat seq [(byte-array [exclusive-byte]) k])))
 
+;; TODO check if consecutive keys are also encoded to consecutive byte arrays
+;; the little endian encoding could become a problem
+;; TODO check if threre is an option for an immutable byte array view
 (defn get-range
   ([conn keyspace]
    (wcar conn
@@ -71,7 +74,7 @@
   ([conn keyspace prefix-k]
    (wcar conn
          (->
-          (car/zrangebylex keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba prefix-k))))
+          (car/zrangebylex keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k)))))
           car/parse-raw)))
   ([conn keyspace start-k stop-k]
    (wcar conn
@@ -92,7 +95,7 @@
              car/parse-raw)))
   ([conn keyspace prefix-k limit]
    (wcar conn
-         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba prefix-k))) "BYLEX"
+         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k)))) "BYLEX"
                          :limit 0 limit)
              car/parse-raw))))
 

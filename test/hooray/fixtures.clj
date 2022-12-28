@@ -109,7 +109,7 @@
 (defonce ^:prviate my-conn-pool   (car/connection-pool {})) ; Create a new stateful pool
 (def ^:private     my-conn-spec-1 {:uri "redis://localhost:6379/"})
 
-(def ^:private redis-conn {:pool my-conn-pool :spec my-conn-spec-1})
+(def redis-conn {:pool my-conn-pool :spec my-conn-spec-1})
 
 (def ^:dynamic *keyspace* nil)
 (def ^:dynamic *key-store* nil)

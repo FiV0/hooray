@@ -38,6 +38,11 @@
              (aset-byte b idx (byte 0))
              (recur b (dec idx)))))))
 
+(defn copy [^"[B" b]
+  (let [res (byte-array (count b))]
+    (System/arraycopy b 0 res 0 (count b))
+    res))
+
 (comment
   (-> 1 int->bytes bump-ba  bytes->int)
   (-> 127 int->bytes vec)
@@ -77,7 +82,7 @@
   (let [len (+ (count b1) (count b2))
         res (byte-array len)]
     (System/arraycopy b1 0 res 0 (count b1))
-    (System/arraycopy b2 0 res (count b1) len)
+    (System/arraycopy b2 0 res (count b1) (count b2))
     res))
 
 (comment
