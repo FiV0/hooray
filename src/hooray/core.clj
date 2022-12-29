@@ -84,7 +84,7 @@
   (def config-map {:type :per
                    :sub-type :redis
                    :name "hello"
-                   :algo :hash
+                   :algo :leapfrog
                    :spec {:uri "redis://localhost:6379/"}})
 
   (def redis-conn (connect config-map))

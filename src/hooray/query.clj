@@ -80,8 +80,12 @@
 (defmethod join MemoryGraph [compiled-q db]
   (hj/join compiled-q db))
 
-(defmethod join PersistentGraph [compiled-q db]
-  (hj/join compiled-q db))
+(defmethod join PersistentGraph [compiled-q {:keys [opts] :as db}]
+  (let [algo (-> opts :uri-map :algo)]
+    (case algo
+      (nil :hash) (hj/join compiled-q db)
+      :leapfrog (lf/join compiled-q db)
+      (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
 (defmethod join MemoryGraphIndexed [compiled-q {:keys [opts] :as db}]
   (let [algo (-> opts :uri-map :algo)]

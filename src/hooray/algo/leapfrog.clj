@@ -38,7 +38,7 @@
   (itr/at-end? (nth iterators p)))
 
 (defn- lookup-row [graph row]
-  (mapv #(g-index/hash->value graph %) row))
+  (into [] (graph/hashs->values graph row)))
 
 (defn- next-var-index [pattern var]
   (cond

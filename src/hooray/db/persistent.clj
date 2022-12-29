@@ -74,7 +74,7 @@
                             :spec {:uri "redis://localhost:6379/"}}))
 
 ;; TODO this whole connection business doesn't properly use multimethods yet
-(defmethod db/connect* :per [{:keys [sub-type algo _name] :as uri-map}]
-  (case [sub-type algo]
-    [:redis :hash] (->persistent-connection uri-map)
+(defmethod db/connect* :per [{:keys [sub-type _algo _name] :as uri-map}]
+  (case sub-type
+    :redis (->persistent-connection uri-map)
     (throw (ex-info "Persistent connection of this type currently not supported!" uri-map))))

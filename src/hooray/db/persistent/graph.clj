@@ -9,6 +9,7 @@
   (:import (java.nio ByteBuffer)))
 
 (declare get-from-index)
+(declare ->redis-iterator)
 
 ;; TODO look at optimizing
 (defn resolve-triple* [key-store doc-store triple]
@@ -39,8 +40,11 @@
   (resolve-tuple [this tuple]
     (s/assert ::h-spec/tuple tuple)
     (util/unsupported-ex))
-  (get-iterator [this _tuple] (util/unsupported-ex))
-  (get-iterator [this _tuple _type] (util/unsupported-ex)))
+  (get-iterator [this tuple] (->redis-iterator tuple key-store))
+  (get-iterator [this _tuple _type] (util/unsupported-ex))
+
+  (hash->value [this h] (proto/get-kv doc-store :doc-store h))
+  (hashs->values [this hs] (proto/get-kvs doc-store :doc-store hs)))
 
 (defn ->persistent-graph [conn key-store doc-store]
   (->PersistentGraph conn key-store doc-store))
