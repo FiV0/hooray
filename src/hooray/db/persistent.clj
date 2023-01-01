@@ -27,12 +27,15 @@
    (->PersistentDb conn (per-g/->persistent-graph conn key-store doc-store) :lastest {}))
   ([conn timestamp key-store doc-store]
    {:pre [(latest-or-date? timestamp)]}
-   (->PersistentDb conn (per-g/->persistent-graph conn key-store doc-store) timestamp {})))
+   (->PersistentDb conn (per-g/->persistent-graph conn key-store doc-store) timestamp {}))
+  ([conn timestamp key-store doc-store opts]
+   {:pre [(latest-or-date? timestamp)]}
+   (->PersistentDb conn (per-g/->persistent-graph conn key-store doc-store) timestamp opts)))
 
-(defrecord PersistentConnection [name connection type key-store doc-store]
+(defrecord PersistentConnection [name connection type key-store doc-store opts]
   db/Connection
   (get-name [this] name)
-  (db [this] (->persistent-db connection :latest key-store doc-store))
+  (db [this] (->persistent-db connection :latest key-store doc-store opts))
   (transact [this tx-data] (transact/transact this tx-data))
 
   Closeable
@@ -64,8 +67,9 @@
 (defn ->persistent-connection [{:keys [sub-type name] :as config-map}]
   (let [conn (proto/config-map->conn config-map)
         key-store (->key-store sub-type conn)
-        doc-store (->doc-store sub-type conn)]
-    (->PersistentConnection name conn sub-type key-store doc-store)))
+        doc-store (->doc-store sub-type conn)
+        opts {:uri-map config-map}]
+    (->PersistentConnection name conn sub-type key-store doc-store opts)))
 
 (comment
   ;; "hooray:per:redis:hash//localhost:6379"
