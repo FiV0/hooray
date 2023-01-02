@@ -81,34 +81,40 @@
   (require '[clojure.edn :as edn]
            '[hooray.graph-gen :as g-gen])
 
-  (def config-map {:type :per
-                   :sub-type :redis
-                   :name "hello"
-                   :algo :leapfrog
-                   :spec {:uri "redis://localhost:6379/"}})
+  (def config-map-lf {:type :per
+                      :sub-type :redis
+                      :name "hello"
+                      :algo :leapfrog
+                      :spec {:uri "redis://localhost:6379/"}})
 
-  (def redis-conn (connect config-map))
-  (db/drop-db redis-conn)
+  (def config-map-hs {:type :per
+                      :sub-type :redis
+                      :name "hello"
+                      :algo :hash
+                      :spec {:uri "redis://localhost:6379/"}})
+
+  (def redis-conn-lf (connect config-map-lf))
+  (def redis-conn-hs (connect config-map-hs))
+  (db/drop-db redis-conn-lf)
   (def data (edn/read-string (slurp "resources/transactions.edn")))
-  (transact redis-conn  [{:db/id 0
-                          :hello :world}
-                         [:db/add 1 :foo :bar]])
-  (time (transact redis-conn data))
+  (transact redis-conn-hs  [{:db/id 0
+                             :hello :world}
+                            [:db/add 1 :foo :bar]])
+  (time (transact redis-conn-hs data))
 
   (def results (time (q '{:find [?e ?a ?v]
                           :where [[?e ?a ?v]]}
-                        (db redis-conn))))
+                        (db redis-conn-hs))))
 
   (time (q '{:find [?name ?album]
              :where [[?t :track/name "For Those About To Rock (We Salute You)" ]
                      [?t :track/album ?album]
                      [?album :album/artist ?artist]
                      [?artist :artist/name ?name]]}
-           (db redis-conn)))
+           (db redis-conn-hs)))
 
-
-  (def random-graph (g-gen/random-graph 100 0.3))
-  (transact redis-conn (g-gen/graph->ops random-graph))
+  (def random-graph (g-gen/random-graph 10 0.3))
+  (transact redis-conn-lf (g-gen/graph->ops random-graph))
   (transact conn (g-gen/graph->ops random-graph))
 
   (def triangle-query '{:find [?a ?b ?c]
@@ -116,7 +122,6 @@
                                 [?a :g/to ?c]
                                 [?b :g/to ?c]]})
 
-  (time (count (q triangle-query (db redis-conn))))
-  (time (count (q triangle-query (db conn))))
-
-  )
+  (time (count (q triangle-query (db redis-conn-hs))))
+  (time (count (q triangle-query (db redis-conn-lf))))
+  (time (count (q triangle-query (db conn)))))

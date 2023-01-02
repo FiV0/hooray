@@ -7,6 +7,7 @@
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util]
+            [hooray.db.persistent.packing :as pack]
             [medley.core :refer [map-kv]]))
 
 ;; Leapfrog Triejoin
@@ -50,7 +51,9 @@
 (def idx->name {0 :e 1 :a 2 :v})
 
 (defn- pos->literal [var? var->bindings partial-row]
-  (cond (util/constant? var?) (g-index/hash var?)
+  (cond (util/constant? var?)
+        ;; FIXME  hash fn needs be custom
+        (pack/hash->bb (g-index/hash var?))
         (< (var->bindings var?) (clojure.core/count partial-row))
         (nth partial-row (var->bindings var?))
         :else nil))
@@ -153,12 +156,15 @@
           iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out
-          (recur (cons partial-row res) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))
+          (do
+            ;; (println "bottom" (map pack/bb->hash partial-row))
+            (recur (cons partial-row res) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack)))
 
           (let [[val new-iterators] (leapfrog-next iterators)]
             (cond (not (nil? val))
                   (let [partial-row (conj partial-row val)
                         var-level (inc var-level)]
+                    ;; (println "not nil" (map pack/bb->hash partial-row))
                     (recur res partial-row var-level
                            (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph)
                            (conj iterator-stack new-iterators)))
@@ -169,7 +175,9 @@
 
                   ;; moving up
                   :else
-                  (recur res (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack)))))))
+                  (do
+                    ;; (println "moving up" (map pack/bb->hash partial-row))
+                    (recur res (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))))))))
     (throw (ex-info "Query must contain where clause!" {:query query}))))
 
 (comment
