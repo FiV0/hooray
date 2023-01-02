@@ -78,12 +78,7 @@
         (recur (conj res (Arrays/copyOfRange b i new-i)) new-i))
       res)))
 
-(defn concat-ba [^"[B" b1 ^"[B" b2]
-  (let [len (+ (count b1) (count b2))
-        res (byte-array len)]
-    (System/arraycopy b1 0 res 0 (count b1))
-    (System/arraycopy b2 0 res (count b1) (count b2))
-    res))
+
 
 (comment
   (def some-values [{} 1 3])
@@ -92,5 +87,49 @@
   (->>
    (map hash some-values)
    (apply pack-hash-array)
-   unpack-hash-array)
-  )
+   unpack-hash-array))
+
+(defn concat-ba [^"[B" b1 ^"[B" b2]
+  (let [len (+ (count b1) (count b2))
+        res (byte-array len)]
+    (System/arraycopy b1 0 res 0 (count b1))
+    (System/arraycopy b2 0 res (count b1) (count b2))
+    res))
+
+(defn ba-wrap ^ByteBuffer [^"[B" b pos len]
+  (ByteBuffer/wrap b pos len))
+
+(defn  bb-view ^ByteBuffer [^ByteBuffer bb pos len]
+  (let [res (.slice bb)]
+    (.position res pos)
+    (.limit res (+ pos len))
+    bb))
+
+(defn bb-unwrap ^"[B" [^ByteBuffer bb]
+  (Arrays/copyOfRange (.array bb) (.position bb) (.limit bb)))
+
+(comment
+  (def ba1 (byte-array [0 0 0 1]))
+  (def ba2 (byte-array [0 0 0 2]))
+  (def bb1 (ByteBuffer/wrap ba1))
+  (def bb2 (ByteBuffer/wrap ba2))
+  (compare bb1 bb2)
+  (def bb1 (ba-wrap ba1 0 3))
+  (def bb2 (ba-wrap ba2 0 3))
+  (def bb1 (ba-wrap ba1 1 3))
+  (def bb2 (ba-wrap ba2 0 3))
+  (= bb1 bb2)
+  (-> (ba-wrap ba1 1 3) bb-unwrap seq))
+
+(defn unpack-hash-array->bb
+  "version that wraps (shallow) the underlying byte array into byte buffers"
+  [^"[B" b]
+  (loop [res [] i 0]
+    (if (< i (count b))
+      (recur (conj res (ba-wrap b i hash-length)) (+ i hash-length))
+      res)))
+
+(comment
+  (->> (pack-hash-array -15128758 1392991556 -1556392013)
+       unpack-hash-array->bb
+       (map (comp bytes->int bb-unwrap))))
