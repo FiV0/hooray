@@ -41,10 +41,14 @@
     (s/assert ::h-spec/tuple tuple)
     (util/unsupported-ex))
   (get-iterator [this tuple] (->redis-iterator tuple key-store))
-  (get-iterator [this _tuple _type] (util/unsupported-ex))
+  (get-iterator [this tuple _type] (->redis-iterator tuple key-store))
 
-  (hash->value [this h] (proto/get-kv doc-store :doc-store h))
-  (hashs->values [this hs] (proto/get-kvs doc-store :doc-store hs)))
+  (hash->value [this h] (proto/get-kv doc-store :doc-store (cond-> h (pack/byte-buffer? h) pack/bb-unwrap)))
+  (hashs->values [this hs]
+    (when (seq hs)
+      (cond->> hs
+        (pack/byte-buffer? (first hs)) (map pack/bb-unwrap)
+        :always (proto/get-kvs doc-store :doc-store)))))
 
 (defn ->persistent-graph [conn key-store doc-store]
   (->PersistentGraph conn key-store doc-store))
@@ -95,10 +99,11 @@
     [[]]
     []))
 
-(def ^:private fetch-limit 10)
+(def ^:private fetch-limit 100)
 
 (defn unpack-hash [^"[B" prefix-k ^"[B" k]
-  (.getInt (ByteBuffer/wrap k) (count prefix-k)))
+  #_(.getInt (ByteBuffer/wrap k) (count prefix-k))
+  (ByteBuffer/wrap k (count prefix-k) pack/hash-length))
 
 ;; assumption is that (first cache) <= k <= (last cache)
 (defn- binary-search
@@ -106,7 +111,7 @@
   (loop [l 0 r (count cache)]
     (if (< l r)
       (let [m (quot (+ l r) 2)]
-        (if (< (nth cache m) k)
+        (if (< (compare (nth cache m) k) 0)
           (recur (inc m) r)
           (recur l m)))
       (subvec cache l))))
@@ -121,6 +126,7 @@
 ;; TODO think about how to deal with state (should we prefetch?)
 ;; TODO should the count be used to not fetch more
 ;; TODO if cache < fetch-limit remember it's finished
+;; try to defer BufferWrap to key and binary-search
 (defrecord RedisIterator [key-store keyspace prefix-k tuple cache]
   itr/LeapIterator
   (key [this] (first cache))
@@ -128,17 +134,19 @@
     (assert (seq cache) "Cache can not be empty!")
     (if-let [new-cache (next cache)]
       (->RedisIterator key-store keyspace prefix-k tuple new-cache)
-      (let [new-cache (->> (proto/seek key-store keyspace (pack/concat-ba prefix-k (pack/int->bytes (int (inc (first cache))))) fetch-limit)
+      ;; here k is a wrapped ByteBuffer
+      ;; maybe copy can be avoided
+      (let [new-cache (->> (proto/seek key-store keyspace (pack/inc-ba (pack/copy (.array (first cache)))) fetch-limit)
                            (map (partial unpack-hash prefix-k))
                            vec)]
         (if (seq new-cache)
           (->RedisIterator key-store keyspace prefix-k tuple new-cache)
           (->RedisIterator key-store keyspace prefix-k tuple nil)))))
   (seek [this k]
-    (if (<= k (last cache))
+    (if (<= (compare k (last cache)) 0)
       (->RedisIterator key-store keyspace prefix-k tuple (binary-search cache k))
       (let [new-cache (->> (proto/get-range key-store keyspace
-                                            (pack/concat-ba prefix-k (pack/int->bytes k))
+                                            (pack/concat-ba prefix-k (.array k))
                                             (pack/inc-ba (pack/copy prefix-k)) fetch-limit)
                            (map (partial unpack-hash prefix-k))
                            vec)]
@@ -150,12 +158,14 @@
   (count* [this]
     (proto/count-ks key-store keyspace prefix-k)))
 
+
 ;; TODO the hashing should be moved in here
 ;; or be replaced by byte array comparison
 (defn ->redis-iterator [{:keys [triple-order triple] :as tuple} key-store]
-  (s/assert ::h-spec/tuple tuple)
+  ;; FIX add spec for persistent connections
+  ;; (s/assert ::h-spec/tuple tuple)
   (let [keyspace (keyword (apply str (map name triple-order)))
-        prefix-k (apply pack/pack-hash-array (butlast triple))]
+        prefix-k (apply pack/pack-hash-array-bb (butlast triple))]
     (if-let [cache (seq (proto/seek key-store keyspace prefix-k fetch-limit))]
       (->RedisIterator key-store keyspace prefix-k tuple (vec (map (partial unpack-hash prefix-k) cache)))
       (->RedisIterator key-store keyspace prefix-k tuple nil))))

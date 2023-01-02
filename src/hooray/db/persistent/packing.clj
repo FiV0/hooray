@@ -10,7 +10,7 @@
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
-(def ^:private hash-length (Integer/BYTES))
+(def hash-length (Integer/BYTES))
 (defn hash [o] (clojure.core/hash o))
 
 (defn bytes->int [^"[B" b]
@@ -96,6 +96,9 @@
     (System/arraycopy b2 0 res (count b1) (count b2))
     res))
 
+(defn byte-buffer? [bb]
+  (instance? ByteBuffer bb))
+
 (defn ba-wrap ^ByteBuffer [^"[B" b pos len]
   (ByteBuffer/wrap b pos len))
 
@@ -108,6 +111,16 @@
 (defn bb-unwrap ^"[B" [^ByteBuffer bb]
   (Arrays/copyOfRange (.array bb) (.position bb) (.limit bb)))
 
+(defn bb-count [^ByteBuffer bb]
+  (- (.limit bb) (.position bb)))
+
+(defn bb->hash [^ByteBuffer bb]
+  {:pre [(= hash-length (bb-count bb))]}
+  (bytes->int (Arrays/copyOfRange (.array bb) (.position bb) (.limit bb))))
+
+(defn hash->bb [i]
+  (ByteBuffer/wrap (int->bytes i)))
+
 (comment
   (def ba1 (byte-array [0 0 0 1]))
   (def ba2 (byte-array [0 0 0 2]))
@@ -118,8 +131,21 @@
   (def bb2 (ba-wrap ba2 0 3))
   (def bb1 (ba-wrap ba1 1 3))
   (def bb2 (ba-wrap ba2 0 3))
+  (byte-buffer? bb1)
+  (byte-buffer? (byte-array 2))
   (= bb1 bb2)
+  (compare bb1 bb2)
   (-> (ba-wrap ba1 1 3) bb-unwrap seq))
+
+(defn pack-hash-array-bb [& args]
+  (let [len (* hash-length (count args))
+        ba (byte-array len)]
+    (reduce (fn [i bb]
+              (System/arraycopy (.array bb) (.position bb) ba i hash-length)
+              (+ i hash-length))
+            0
+            args)
+    ba))
 
 (defn unpack-hash-array->bb
   "version that wraps (shallow) the underlying byte array into byte buffers"
