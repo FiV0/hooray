@@ -91,11 +91,21 @@
 (defn seek
   ([conn keyspace prefix-k]
    (wcar conn
-         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) "+" "BYLEX")
+         (-> (car/zrange keyspace (if-not (empty? prefix-k)
+                                    (car/raw (inclusive-key prefix-k))
+                                    "-")
+                         "+" "BYLEX")
              car/parse-raw)))
   ([conn keyspace prefix-k limit]
    (wcar conn
-         (-> (car/zrange keyspace (car/raw (inclusive-key prefix-k)) (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k)))) "BYLEX"
+         (-> (car/zrange keyspace
+                         (if-not (empty? prefix-k)
+                           (car/raw (inclusive-key prefix-k))
+                           "-")
+                         (if-not (empty? prefix-k)
+                           (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k))))
+                           "+")
+                         "BYLEX"
                          :limit 0 limit)
              car/parse-raw))))
 
