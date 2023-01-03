@@ -4,7 +4,8 @@
 (ns hooray.query.spec
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [hooray.util :as util]))
+            [hooray.util :as util])
+  (:import (java.nio ByteBuffer)))
 
 (s/def ::logic-var
   (s/and simple-symbol?
@@ -128,3 +129,16 @@
 
   (def tuple (s/conform ::tuple {:triple '[?e :foo/bar]
                                  :triple-order '[:e :a]})))
+
+(s/def ::byte-buffer #(instance? ByteBuffer %))
+(s/def :persistent/triple
+  (s/and vector?
+         (s/conformer identity vec)
+         (s/cat
+          :e (s/or :literal ::byte-buffer, :logic-var ::logic-var)
+          :a (s/? (s/or :logic-var ::logic-var, :literal ::byte-buffer))
+          :v (s/? (s/or :logic-var ::logic-var, :literal ::byte-buffer)))))
+
+(s/def ::persistent-tuple (s/and (s/keys :req-un [:persistent/triple ::triple-order])
+                                 (fn [{:keys [triple triple-order]}]
+                                   (= (count triple) (count triple-order)))))

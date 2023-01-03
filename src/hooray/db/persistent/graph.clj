@@ -163,7 +163,7 @@
 ;; or be replaced by byte array comparison
 (defn ->redis-iterator [{:keys [triple-order triple] :as tuple} key-store]
   ;; FIX add spec for persistent connections
-  ;; (s/assert ::h-spec/tuple tuple)
+  (s/assert ::h-spec/persistent-tuple tuple)
   (let [keyspace (keyword (apply str (map name triple-order)))
         prefix-k (apply pack/pack-hash-array-bb (butlast triple))]
     (if-let [cache (seq (proto/seek key-store keyspace prefix-k fetch-limit))]
