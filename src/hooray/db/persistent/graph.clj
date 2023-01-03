@@ -5,8 +5,11 @@
             [hooray.db.persistent.protocols :as proto]
             [hooray.graph :as g]
             [hooray.query.spec :as h-spec]
-            [hooray.util :as util])
+            [hooray.util :as util]
+            [taoensso.nippy :as nippy])
   (:import (java.nio ByteBuffer)))
+
+(defn- ->value [b] (nippy/thaw b))
 
 (declare get-from-index)
 (declare ->redis-iterator)
@@ -43,12 +46,14 @@
   (get-iterator [this tuple] (->redis-iterator tuple key-store))
   (get-iterator [this tuple _type] (->redis-iterator tuple key-store))
 
-  (hash->value [this h] (proto/get-kv doc-store :doc-store (cond-> h (pack/byte-buffer? h) pack/bb-unwrap)))
+  (hash->value [this h] (-> (proto/get-kv doc-store :doc-store (cond-> h (pack/byte-buffer? h) pack/bb-unwrap))
+                            ->value))
   (hashs->values [this hs]
     (when (seq hs)
-      (cond->> hs
-        (pack/byte-buffer? (first hs)) (map pack/bb-unwrap)
-        :always (proto/get-kvs doc-store :doc-store)))))
+      (->> (proto/get-kvs doc-store :doc-store
+                          (cond->> hs
+                            (pack/byte-buffer? (first hs)) (map pack/bb-unwrap)))
+           (map ->value)))))
 
 (defn ->persistent-graph [conn key-store doc-store]
   (->PersistentGraph conn key-store doc-store))
