@@ -137,7 +137,8 @@
   (key [this] (first cache))
   (next [this]
     (assert (seq cache) "Cache can not be empty!")
-    (if-let [new-cache (next cache)]
+    ;; FIX this (vec (next ..)) is unnecessary
+    (if-let [new-cache (vec (next cache))]
       (->RedisIterator key-store keyspace prefix-k tuple new-cache)
       ;; here k is a wrapped ByteBuffer
       ;; maybe copy can be avoided
