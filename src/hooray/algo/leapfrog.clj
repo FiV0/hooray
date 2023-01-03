@@ -111,7 +111,7 @@
 (defrecord Iterators [iterators position])
 
 (defn ->iterators [iterators]
-  (->Iterators (vec (sort-by #(itr/key %) iterators)) 0))
+  (->Iterators (vec (sort-by #(itr/key %) compare iterators)) 0))
 
 (s/fdef var->iterators :args (s/cat :var util/variable?
                                     :partial-row (s/and vector? (s/* int?))
