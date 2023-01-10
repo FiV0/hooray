@@ -47,7 +47,7 @@ in the [chinook-db](https://github.com/FiV0/xtdb-chinook).
 ```
 
 The goal of the library initially was to test different join algorithms.
-As an example let us compare the runtime of the triangle query (counting
+As an example let us compare the runtime of the triangle query (enumerating
 the triangles in a graph) for two different connection types. The
 connection type determines the backing storage and the algorithm that will
 be used.
@@ -80,6 +80,16 @@ be used.
 - For certain connection types having the same variable multiple times in a clause (`[?a ?a ?a]`)
 currently does not work. We are aware of that and just have not decided how to deal
 with the unification in that case.
+
+### Join Algorithms
+
+Currently the repository implements 3 join algorithms:
+- Hash Join
+- Leapfrog Triejoin ( https://arxiv.org/pdf/1210.0481.pdf )
+- Generic Join (a variation of Generic-Join https://arxiv.org/abs/1310.3314 )
+
+Some others that might be interesting to add for comparison.
+- Yannakakis algorithm ( the standard algorithm for non-cyclic queries)
 
 ### Inspiration
 Some projects I have looked at and drawn some inspiration from
