@@ -110,8 +110,13 @@
 
 (defrecord Iterators [iterators position])
 
+(require '[hooray.db.persistent.packing :as pack])
+
 (defn ->iterators [iterators]
-  (->Iterators (vec (sort-by #(itr/key %) compare iterators)) 0))
+  (->Iterators (vec (sort-by #(itr/key %) #(cond (nil? %1) -1
+                                                 (nil? %2)  1
+                                                 :else (pack/compare-unsigned %1 %2))
+                             #_compare iterators)) 0))
 
 (s/fdef var->iterators :args (s/cat :var util/variable?
                                     :partial-row (s/and vector? (s/* int?))
@@ -127,9 +132,18 @@
 
 (s/fdef leapfrog-next :args (s/cat :iterators ::iterators))
 
+;; (require '[hooray.db.persistent.packing :as pack])
+
 (defn leapfrog-next [{:keys [iterators position]}]
   (let [k (count iterators)]
     (loop [p position itrs iterators]
+      ;; (println "iterator positions")
+      ;; (doseq [i (range k)]
+      ;;   (print "i " i " " (seq (.array (iterator-key itrs i))) " "))
+      ;; (println)
+      ;; (doseq [i (range k)]
+      ;;   (print "i " i " " (seq (pack/bb-unwrap (iterator-key itrs i))) " "))
+      ;; (println)
       (let [x' (iterator-key itrs (mod (dec p) k))
             x (iterator-key itrs p)]
         (cond

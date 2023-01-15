@@ -129,7 +129,6 @@
                          :limit 0 limit)
              car/parse-raw))))
 
-(integer? (long 1))
 
 (defn count-ks
   ([conn keyspace]

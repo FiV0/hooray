@@ -104,8 +104,6 @@
     [[]]
     []))
 
-(def ^:private fetch-limit 100)
-
 (defn unpack-hash [^"[B" prefix-k ^"[B" k]
   #_(.getInt (ByteBuffer/wrap k) (count prefix-k))
   (ByteBuffer/wrap k (count prefix-k) pack/hash-length))
@@ -116,7 +114,7 @@
   (loop [l 0 r (count cache)]
     (if (< l r)
       (let [m (quot (+ l r) 2)]
-        (if (< (compare (nth cache m) k) 0)
+        (if (< (pack/compare-unsigned (nth cache m) k) 0)
           (recur (inc m) r)
           (recur l m)))
       (subvec cache l))))
@@ -126,6 +124,8 @@
   (binary-search [1 7 8 9] 2)
   (binary-search [1 7 8 9] 0)
   (binary-search [1 7 8 9] 12))
+
+(def ^:private fetch-limit 100)
 
 ;; cache is for now just a vector of previously fetched items
 ;; TODO think about how to deal with state (should we prefetch?)
@@ -138,22 +138,19 @@
   (next [this]
     (assert (seq cache) "Cache can not be empty!")
     ;; FIX this (vec (next ..)) is unnecessary
-    (if-let [new-cache (vec (next cache))]
-      (->RedisIterator key-store keyspace prefix-k tuple new-cache)
-      ;; here k is a wrapped ByteBuffer
-      ;; maybe copy can be avoided
-      (let [new-cache (->> (proto/seek key-store keyspace (pack/inc-ba (pack/copy (.array (first cache)))) fetch-limit)
+    (if-let [new-cache (next cache)]
+      (->RedisIterator key-store keyspace prefix-k tuple (vec new-cache))
+      (let [new-cache (->> (proto/seek key-store keyspace prefix-k (pack/inc-ba (pack/bb-unwrap (first cache))) fetch-limit)
                            (map (partial unpack-hash prefix-k))
                            vec)]
         (if (seq new-cache)
           (->RedisIterator key-store keyspace prefix-k tuple new-cache)
           (->RedisIterator key-store keyspace prefix-k tuple nil)))))
   (seek [this k]
-    (if (<= (compare k (last cache)) 0)
+    (assert (instance? ByteBuffer k))
+    (if (<= (pack/compare-unsigned #_compare k (last cache)) 0)
       (->RedisIterator key-store keyspace prefix-k tuple (binary-search cache k))
-      (let [new-cache (->> (proto/get-range key-store keyspace
-                                            (pack/concat-ba prefix-k (.array k))
-                                            (pack/inc-ba (pack/copy prefix-k)) fetch-limit)
+      (let [new-cache (->> (proto/seek key-store keyspace prefix-k (pack/bb-unwrap k) fetch-limit)
                            (map (partial unpack-hash prefix-k))
                            vec)]
         (if (seq new-cache)
@@ -164,7 +161,6 @@
   (count* [this]
     (proto/count-ks key-store keyspace prefix-k)))
 
-
 ;; TODO the hashing should be moved in here
 ;; or be replaced by byte array comparison
 (defn ->redis-iterator [{:keys [triple-order triple] :as tuple} key-store]
@@ -172,6 +168,6 @@
   (s/assert ::h-spec/persistent-tuple tuple)
   (let [keyspace (keyword (apply str (map name triple-order)))
         prefix-k (apply pack/pack-hash-array-bb (butlast triple))]
-    (if-let [cache (seq (proto/seek key-store keyspace prefix-k fetch-limit))]
+    (if-let [cache (seq (proto/get-range key-store keyspace prefix-k (pack/inc-ba (pack/copy prefix-k)) fetch-limit))]
       (->RedisIterator key-store keyspace prefix-k tuple (vec (map (partial unpack-hash prefix-k) cache)))
       (->RedisIterator key-store keyspace prefix-k tuple nil))))

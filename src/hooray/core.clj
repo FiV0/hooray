@@ -79,6 +79,7 @@
 
 (comment
   (require '[clojure.edn :as edn]
+           '[clojure.java.io :as io]
            '[hooray.graph-gen :as g-gen])
 
   (def config-map-lf {:type :per
@@ -114,6 +115,9 @@
            (db redis-conn-hs)))
 
   (def random-graph (g-gen/random-graph 10 0.3))
+  (spit (io/file "problem-graph.edn") (pr-str random-graph))
+  (def random-graph (edn/read-string (slurp (io/file "problem-graph.edn"))))
+
   (transact redis-conn-lf (g-gen/graph->ops random-graph))
   (transact conn (g-gen/graph->ops random-graph))
 

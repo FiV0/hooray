@@ -27,6 +27,7 @@
 (defn inc-ba
   ([^"[B" b] (inc-ba b (dec (count b))))
   ([^"[B" b idx]
+   (assert (<= 0 idx))
    (let [val (aget b idx)]
      (cond (and (= 0 idx) (= val Byte/MAX_VALUE))
            (throw (ex-info "Byte Array overflow!" {}))
