@@ -1,4 +1,4 @@
-{:paths ["src" "resources"]
+{:paths ["src" "resources" "target/classes"]
 
  :deps
  {org.clojure/clojure                 {:mvn/version "1.11.1"}
@@ -9,6 +9,9 @@
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
   medley/medley                       {:mvn/version "1.4.0"}
   spootnik/unilog                     {:mvn/version "0.7.30"}
+
+  ;; hashing and byte array utils
+  com.google.guava/guava              {:mvn/version "31.1-jre"}
 
   ;; storage options
   ;; redis
