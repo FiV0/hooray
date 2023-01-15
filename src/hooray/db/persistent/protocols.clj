@@ -47,7 +47,8 @@
     [this keyspace begin end limit])
   (seek
     [this keyspace prefix-k]
-    [this keyspace prefix-k limit])
+    [this keyspace prefix-k limit]
+    [this keyspace prefix-k k limit])
   (count-ks
     [this keyspace]
     [this keyspace prefix-k]

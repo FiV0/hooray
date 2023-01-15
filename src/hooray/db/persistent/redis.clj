@@ -89,14 +89,9 @@
           car/parse-raw))))
 
 (defn seek
+  {:arglists '([conn keyspace prefix-k] [conn keyspace prefix-k limit]
+               [conn keyspace prefix-k k] [conn keyspace prefix-k k limit])}
   ([conn keyspace prefix-k]
-   (wcar conn
-         (-> (car/zrange keyspace (if-not (empty? prefix-k)
-                                    (car/raw (inclusive-key prefix-k))
-                                    "-")
-                         "+" "BYLEX")
-             car/parse-raw)))
-  ([conn keyspace prefix-k limit]
    (wcar conn
          (-> (car/zrange keyspace
                          (if-not (empty? prefix-k)
@@ -105,9 +100,36 @@
                          (if-not (empty? prefix-k)
                            (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k))))
                            "+")
+                         "BYLEX")
+             car/parse-raw)))
+  ([conn keyspace prefix-k k-or-limit]
+   (if (int? k-or-limit)
+     (wcar conn
+           (-> (car/zrange keyspace
+                           (if-not (empty? prefix-k)
+                             (car/raw (inclusive-key prefix-k))
+                             "-")
+                           (if-not (empty? prefix-k)
+                             (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k))))
+                             "+")
+                           "BYLEX"
+                           :limit 0 k-or-limit)
+               car/parse-raw))
+     (seek conn keyspace prefix-k k-or-limit Integer/MAX_VALUE)))
+  ([conn keyspace prefix-k k limit]
+   (wcar conn
+         (-> (car/zrange keyspace
+                         (if-not (empty? prefix-k)
+                           (car/raw (inclusive-key (pack/concat-ba prefix-k k)))
+                           (car/raw (inclusive-key k)))
+                         (if-not (empty? prefix-k)
+                           (car/raw (exclusive-key (pack/inc-ba (pack/copy prefix-k))))
+                           "+")
                          "BYLEX"
                          :limit 0 limit)
              car/parse-raw))))
+
+(integer? (long 1))
 
 (defn count-ks
   ([conn keyspace]
@@ -178,6 +200,7 @@
   (get-range [this keyspace begin end limit] (get-range conn keyspace begin end limit))
   (seek [this keyspace prefix-k] (seek conn keyspace prefix-k))
   (seek [this keyspace prefix-k limit] (seek conn keyspace prefix-k limit))
+  (seek [this keyspace prefix-k k limit] (seek conn keyspace prefix-k k limit))
   (count-ks [this keyspace] (count-ks conn keyspace))
   (count-ks [this keyspace prefix-k] (count-ks conn keyspace prefix-k))
   (count-ks [this keyspace begin end] (count-ks conn keyspace begin end)))
