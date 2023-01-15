@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [hash])
   (:require [taoensso.nippy :as nippy])
   (:import (java.util Arrays)
-           (java.nio ByteBuffer)))
+           (java.nio ByteBuffer)
+           (hooray.utils ByteBufferUtil)))
 
 ;; TODO use ByteBuffer slice and wrap to not copy anything and work with raw arrays
 ;; TODO look at https://gist.github.com/pingles/1235344 for inspiration
@@ -42,6 +43,8 @@
   (let [res (byte-array (count b))]
     (System/arraycopy b 0 res 0 (count b))
     res))
+
+(def compare-unsigned #(ByteBufferUtil/compareUnsigned %1 %2))
 
 (comment
   (-> 1 int->bytes bump-ba  bytes->int)
