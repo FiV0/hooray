@@ -83,7 +83,8 @@
 (defprotocol Database
   (as-of [this t] "Retrieves a database as of a given moment, inclusive")
   (as-of-t [this] "Returns the as-of point, or nil if none")
-  (entity [this id] "Returns an entity for an identifier"))
+  (entity [this id] "Returns an entity for an identifier")
+  (get-comp [this] "Returns the key comparator for this database."))
 
 (defprotocol BitempDatabase
   (in-between [this t1 t2] "Retrieves a database with facts added or retrieved in between t1 and t2."))

@@ -110,40 +110,27 @@
 
 (defrecord Iterators [iterators position])
 
-(require '[hooray.db.persistent.packing :as pack])
-
-(defn ->iterators [iterators]
-  (->Iterators (vec (sort-by #(itr/key %) #(cond (nil? %1) -1
-                                                 (nil? %2)  1
-                                                 :else (pack/compare-unsigned %1 %2))
-                             #_compare iterators)) 0))
+(defn ->iterators
+  ([iterators] (->iterators compare iterators))
+  ([compare-fn iterators] (->Iterators (vec (sort-by #(itr/key %) compare-fn iterators)) 0)))
 
 (s/fdef var->iterators :args (s/cat :var util/variable?
                                     :partial-row (s/and vector? (s/* int?))
                                     :vars->tuple-fns ::vars->tuple-fns
                                     :graph #(satisfies? graph/GraphIndex %)))
 
-(defn var->iterators [var partial-row vars->tuple-fns graph]
+(defn var->iterators [var partial-row vars->tuple-fns graph compare-fn]
   (let [graph-type (-> graph :opts :type)]
     (->> (vars->tuple-fns var)
          (map (fn [partial-row->tuple-fn]
                 (graph/get-iterator graph (partial-row->tuple-fn partial-row var) graph-type)))
-         ->iterators)))
+         (->iterators compare-fn))))
 
 (s/fdef leapfrog-next :args (s/cat :iterators ::iterators))
-
-;; (require '[hooray.db.persistent.packing :as pack])
 
 (defn leapfrog-next [{:keys [iterators position]}]
   (let [k (count iterators)]
     (loop [p position itrs iterators]
-      ;; (println "iterator positions")
-      ;; (doseq [i (range k)]
-      ;;   (print "i " i " " (seq (.array (iterator-key itrs i))) " "))
-      ;; (println)
-      ;; (doseq [i (range k)]
-      ;;   (print "i " i " " (seq (pack/bb-unwrap (iterator-key itrs i))) " "))
-      ;; (println)
       (let [x' (iterator-key itrs (mod (dec p) k))
             x (iterator-key itrs p)]
         (cond
@@ -166,8 +153,9 @@
           ;; dummy var to bottom out
           var-join-order (conj var-join-order (gensym "?dummy"))
           graph (db/graph db)
+          compare-fn (db/get-comp db)
           vars->tuple-fns (vars->tuple-fns where var->bindings)
-          iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph)]
+          iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph compare-fn)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out
           (do
@@ -180,7 +168,7 @@
                         var-level (inc var-level)]
                     ;; (println "not nil" (map pack/bb->hash partial-row))
                     (recur res partial-row var-level
-                           (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph)
+                           (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph compare-fn)
                            (conj iterator-stack new-iterators)))
 
                   ;; finished

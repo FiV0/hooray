@@ -20,6 +20,7 @@
     (if (instance? MemoryGraph this)
       (mem-graph/entity graph eid)
       (util/unsupported-ex)))
+  (get-comp [this] compare)
 
   db/GraphDatabase
   (graph [this] graph))

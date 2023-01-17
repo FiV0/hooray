@@ -2,6 +2,7 @@
   (:require [hooray.db :as db]
             [hooray.db.persistent.fdb :as fdb]
             [hooray.db.persistent.graph :as per-g]
+            [hooray.db.persistent.packing :as pack]
             [hooray.db.persistent.protocols :as proto]
             [hooray.db.persistent.redis :as redis]
             [hooray.db.persistent.transact :as transact]
@@ -13,6 +14,10 @@
   (as-of [this t] (util/unsupported-ex))
   (as-of-t [this] timestamp)
   (entity [this eid] (util/unsupported-ex))
+  (get-comp [this]
+    #(cond (nil? %1) -1
+           (nil? %2)  1
+           :else (pack/compare-unsigned %1 %2)))
 
   db/GraphDatabase
   (graph [this] graph))
