@@ -1,5 +1,6 @@
 (ns user
-  (:require [clojure.java.io :as io]
+  (:require [clj-async-profiler.core :as prof]
+            [clojure.java.io :as io]
             [clojure.pprint]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as st]
@@ -27,7 +28,7 @@
 (st/instrument)
 
 (comment
-  (repl/set-refresh-dirs (io/file "src") (io/file "dev") (io/file "test"))
+  (repl/set-refresh-dirs (io/file "src") #_(io/file "dev") (io/file "test"))
   (repl/refresh)
   (repl/clear)
 
@@ -44,3 +45,16 @@
 
 (use-method clojure.pprint/simple-dispatch clojure.lang.IRecord pprint-record)
 (prefer-method clojure.pprint/simple-dispatch clojure.lang.IRecord clojure.lang.IPersistentMap)
+
+
+;;///////////////////////////////////////////////////////////////////////////////
+;;===============================================================================
+;;                                   Profiler
+;;===============================================================================
+;;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+(comment
+  (prof/serve-ui 8080)
+  (prof/start)
+  (prof/stop)
+  )
