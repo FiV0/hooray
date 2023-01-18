@@ -14,10 +14,10 @@
   (as-of [this t] (util/unsupported-ex))
   (as-of-t [this] timestamp)
   (entity [this eid] (util/unsupported-ex))
-  (get-comp [this]
-    #(cond (nil? %1) -1
-           (nil? %2)  1
-           :else (pack/compare-unsigned %1 %2)))
+  (get-comp [this] #(cond (nil? %1) -1
+                          (nil? %2)  1
+                          :else (pack/compare-unsigned %1 %2)))
+  (get-hash-fn [this] #(pack/hash->bb (hash %)))
 
   db/GraphDatabase
   (graph [this] graph))

@@ -3,11 +3,10 @@
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
             [hooray.db.iterator :as itr]
-            [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util]
-            [hooray.db.persistent.packing :as pack]
+            [hooray.util.lru :as lru]
             [medley.core :refer [map-kv]]))
 
 ;; Leapfrog Triejoin
@@ -50,20 +49,19 @@
 
 (def idx->name {0 :e 1 :a 2 :v})
 
-(defn- pos->literal [var? var->bindings partial-row]
+(defn- pos->literal [var? var->bindings partial-row cache]
   (cond (util/constant? var?)
-        ;; FIXME  hash fn needs be custom
-        (pack/hash->bb (g-index/hash var?))
+        (lru/get cache var?)
         (< (var->bindings var?) (clojure.core/count partial-row))
         (nth partial-row (var->bindings var?))
         :else nil))
 
-(defn partial->tuple-fn [pattern var->bindings]
+(defn partial->tuple-fn [pattern var->bindings cache]
   (fn partial-row->tuple [partial-row next-var]
     (let [next-var-idx (next-var-index pattern next-var)
           [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
-          i-literal (pos->literal (nth pattern i) var->bindings partial-row)
-          j-literal (pos->literal (nth pattern j) var->bindings partial-row)]
+          i-literal (pos->literal (nth pattern i) var->bindings partial-row cache)
+          j-literal (pos->literal (nth pattern j) var->bindings partial-row cache)]
       (cond-> {:triple-order [] :triple []}
 
         i-literal
@@ -78,9 +76,9 @@
         (-> (update :triple-order conj (idx->name next-var-idx))
             (update :triple conj next-var))))))
 
-(defn vars->tuple-fns [where var->bindings]
+(defn vars->tuple-fns [where var->bindings cache]
   (->>
-   (map #(vector (filter util/variable? %) (partial->tuple-fn % var->bindings)) where)
+   (map #(vector (filter util/variable? %) (partial->tuple-fn % var->bindings cache)) where)
    (reduce (fn [mapping [clause tuple-fn]]
              (reduce #(update %1 %2 (fnil conj []) tuple-fn) mapping clause)) {})))
 
@@ -154,7 +152,8 @@
           var-join-order (conj var-join-order (gensym "?dummy"))
           graph (db/graph db)
           compare-fn (db/get-comp db)
-          vars->tuple-fns (vars->tuple-fns where var->bindings)
+          cache (lru/create-lru-cache 128 (db/get-hash-fn db))
+          vars->tuple-fns (vars->tuple-fns where var->bindings cache)
           iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph compare-fn)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out

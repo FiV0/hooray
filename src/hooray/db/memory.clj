@@ -21,6 +21,7 @@
       (mem-graph/entity graph eid)
       (util/unsupported-ex)))
   (get-comp [this] compare)
+  (get-hash-fn [this] hash)
 
   db/GraphDatabase
   (graph [this] graph))
