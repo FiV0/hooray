@@ -40,18 +40,21 @@
     (def conn-avl (connect "hooray:mem:avl//data"))
     (def conn-tonsky (connect "hooray:mem:tonsky//data"))
     (def conn-avl-generic (connect "hooray:mem:avl:generic//data"))
+    (def conn-tonsky-generic (connect "hooray:mem:tonsky:generic//data"))
 
     (transact conn data)
     (transact conn-core data)
     (transact conn-avl data)
     (transact conn-tonsky data)
     (transact conn-avl-generic data)
+    (transact conn-tonsky-generic data)
 
     (defn db-bin [] (db conn))
     (defn db-core [] (db conn-core))
     (defn db-avl [] (db conn-avl))
     (defn db-tonsky [] (db conn-tonsky))
-    (defn db-generic [] (db conn-avl-generic)))
+    (defn db-generic [] (db conn-avl-generic))
+    (defn db-tonksy-gen [] (db conn-tonsky-generic)))
 
   (for [db-fn [db-bin db-core db-avl db-tonsky db-generic]]
     (util/with-timing
@@ -68,7 +71,7 @@
                      [?album :album/title ?album-title]
                      [?t :track/album ?album]
                      [?t :track/name ?track-name]]}
-           (db-generic))))
+           (db-tonksy-gen))))
 
 
 ;;///////////////////////////////////////////////////////////////////////////////

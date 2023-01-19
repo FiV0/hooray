@@ -85,6 +85,7 @@
     (case algo
       (nil :hash) (hj/join compiled-q db)
       :leapfrog (lf/join compiled-q db)
+      :generic (gj/join compiled-q db)
       (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
 (defmethod join MemoryGraphIndexed [compiled-q {:keys [opts] :as db}]

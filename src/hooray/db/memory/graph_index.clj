@@ -483,7 +483,10 @@
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  itr/IteratorCount
+  (count* [this] (count index)))
 
 (defmethod print-method LeapIteratorCore [_g ^java.io.Writer w]
   (.write w "#LeapIteratorCore{}"))
@@ -521,7 +524,10 @@
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  itr/IteratorCount
+  (count* [this] (count index)))
 
 (defmethod print-method LeapIteratorAVL [_g ^java.io.Writer w]
   (.write w "#LeapIteratorAvl{}"))
@@ -565,7 +571,10 @@
 
   (level [this] depth)
 
-  (depth [this] max-depth))
+  (depth [this] max-depth)
+
+  itr/IteratorCount
+  (count* [this] (count index)))
 
 (defmethod print-method LeapIteratorTonsky [_g ^java.io.Writer w]
   (.write w "#LeapIteratorTonsky{}"))
