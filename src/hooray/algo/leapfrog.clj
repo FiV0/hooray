@@ -6,8 +6,7 @@
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util]
-            [hooray.util.lru :as lru]
-            [medley.core :refer [map-kv]]))
+            [hooray.util.lru :as lru]))
 
 ;; Leapfrog Triejoin
 ;; https://arxiv.org/pdf/1210.0481.pdf

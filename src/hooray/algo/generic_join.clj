@@ -7,6 +7,7 @@
             [hooray.db.memory.graph-index :as g-index]
             [hooray.graph :as graph]
             [hooray.util :as util]
+            [hooray.util.lru :as lru]
             [hooray.util.persistent-map :as tonsky-map]))
 
 ;; generic-join based on
@@ -23,11 +24,12 @@
 ;; TOOO to adapt if remove doc-store for in-memory db
 (defn- binary-search
   ([extensions k] (binary-search extensions k 0))
-  ([extensions k lower-bound]
+  ([extensions k lower-bound] (binary-search extensions k lower-bound compare))
+  ([extensions k lower-bound compare-fn]
    (loop [l lower-bound r (clojure.core/count extensions)]
      (if (< l r)
        (let [m (quot (+ l r) 2)]
-         (if (< (nth extensions m) k)
+         (if (< (compare-fn (nth extensions m) k) 0)
            (recur (inc m) r)
            (recur l m)))
        l))))
@@ -49,21 +51,22 @@
 
 (def idx->name {0 :e 1 :a 2 :v})
 
-(defn- pos->literal [var? var->bindings prefix]
-  (cond (util/constant? var?) (g-index/hash var?)
+(defn- pos->literal [var? var->bindings prefix cache]
+  (cond (util/constant? var?)
+        (lru/get cache var?)
         (< (var->bindings var?) (clojure.core/count prefix))
         (nth prefix (var->bindings var?))
         :else nil))
 
-(defn prefix->tuple-fn [pattern var-join-order]
+(defn prefix->tuple-fn [pattern var-join-order cache]
   (let [var->bindings (zipmap var-join-order (range))]
     (fn prefix->tuple [prefix]
       (let [size (clojure.core/count prefix)
             next-var (nth var-join-order size)
             next-var-idx (next-var-index pattern next-var)
             [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
-            i-literal (pos->literal (nth pattern i) var->bindings prefix)
-            j-literal (pos->literal (nth pattern j) var->bindings prefix)]
+            i-literal (pos->literal (nth pattern i) var->bindings prefix cache)
+            j-literal (pos->literal (nth pattern j) var->bindings prefix cache)]
         (cond-> {:triple-order [] :triple []}
 
           i-literal
@@ -78,7 +81,8 @@
           (-> (update :triple-order conj (idx->name next-var-idx))
               (update :triple conj next-var)))))))
 
-(defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn prefix->tuple-fn seek-fn]
+(defrecord PatternPrefixExtender [pattern var-join-order graph resolve-tuple-fn
+                                  prefix->tuple-fn seek-fn compare-fn]
   PrefixExtender
   (count [_this prefix]
     (clojure.core/count (resolve-tuple-fn graph (prefix->tuple-fn prefix))))
@@ -99,18 +103,19 @@
         (loop [res [] pos 0 s (seq index)]
           (if (and (seq s) (< pos nb-exts))
             (let [first-ext (nth extensions pos)
-                  first-s (first-index s)]
-              (cond (= first-s first-ext)
+                  first-s (first-index s)
+                  comp-res (compare first-s first-ext)]
+              (cond (zero? comp-res)
                     (recur (conj res first-s)
                            (inc pos)
                            (next s))
-                    (< first-s first-ext)
+                    (neg? comp-res)
                     (recur res
                            pos
                            (seek-fn s first-ext))
-                    (> first-s first-ext)
+                    :else
                     (recur res
-                           (binary-search extensions first-s pos)
+                           (binary-search extensions first-s pos compare-fn)
                            s)))
             res))
         extensions))))
@@ -121,11 +126,12 @@
     :tonsky tonsky-map/seek
     (throw (ex-info "Seek not supported on type!" {:type type}))))
 
-(defn- ->pattern-prefix-extender [pattern var-join-order graph {:keys [sub-type] :as _uri-map}]
+(defn- ->pattern-prefix-extender [pattern var-join-order graph {:keys [cache compare-fn]} {:keys [sub-type] :as _uri-map}]
   (->PatternPrefixExtender pattern var-join-order graph
                            (memoize graph/resolve-tuple)
-                           (memoize (prefix->tuple-fn pattern var-join-order))
-                           (type->seek-fn sub-type)))
+                           (memoize (prefix->tuple-fn pattern var-join-order cache))
+                           (type->seek-fn sub-type)
+                           compare-fn))
 
 ;; prefixes are partial rows
 (defn extend-prefix [extenders prefix]
@@ -146,16 +152,21 @@
 (defn join [{:keys [conformed-query query var-join-order _var->bindings] :as _compiled-q} db]
   {:pre [(vector? var-join-order)]}
   (if-let [where (:where query)]
-    (let [graph (db/graph db)
+    (let [nb-vars (clojure.core/count var-join-order)
+          graph (db/graph db)
+          compare-fn (db/get-comp db)
+          cache (lru/create-lru-cache 128 (db/get-hash-fn db))
+          extender-opts {:cache cache :compare-fn compare-fn}
           uri-map (-> db :opts :uri-map)
           var->extenders
           (reduce (fn [v->e clause]
                     (let [vars (filter util/variable? clause)]
-                      (reduce #(update %1 %2 (fnil conj []) (->pattern-prefix-extender clause var-join-order graph uri-map))
+                      (reduce #(update %1 %2 (fnil conj [])
+                                       (->pattern-prefix-extender clause var-join-order graph extender-opts uri-map))
                               v->e vars)))
                   {} where)]
       (loop [res '([]) level 0]
-        (if (= level (clojure.core/count var-join-order))
+        (if (= level nb-vars)
           (map (partial lookup-row graph) res)
           (recur (extend (var->extenders (nth var-join-order level)) res) (inc level)))))
     (throw (ex-info "Query must contain where clause!" {:query conformed-query}))))
