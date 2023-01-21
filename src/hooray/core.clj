@@ -91,6 +91,12 @@
                       :algo :leapfrog
                       :spec {:uri "redis://localhost:6379/"}})
 
+  (def config-map-gen {:type :per
+                       :sub-type :redis
+                       :name "hello"
+                       :algo :generic
+                       :spec {:uri "redis://localhost:6379/"}})
+
   (def config-map-hs {:type :per
                       :sub-type :redis
                       :name "hello"
@@ -98,6 +104,7 @@
                       :spec {:uri "redis://localhost:6379/"}})
 
   (def redis-conn-lf (connect config-map-lf))
+  (def redis-conn-gen (connect config-map-gen))
   (def redis-conn-hs (connect config-map-hs))
   (db/drop-db redis-conn-lf)
   (def data (edn/read-string (slurp "resources/transactions.edn")))
@@ -121,14 +128,21 @@
   (spit (io/file "problem-graph.edn") (pr-str random-graph))
   (def random-graph (edn/read-string (slurp (io/file "problem-graph.edn"))))
 
-  (transact redis-conn-lf (g-gen/graph->ops random-graph))
-  (transact conn (g-gen/graph->ops random-graph))
+  (do
+    (db/drop-db redis-conn-lf)
+    (def random-graph #_(g-gen/random-graph 100 0.3) (g-gen/complete-graph 100))
+    (transact redis-conn-lf (g-gen/graph->ops random-graph)))
+
+  (do
+    (def conn (connect "hooray:mem://data"))
+    (transact conn (g-gen/graph->ops random-graph)))
 
   (def triangle-query '{:find [?a ?b ?c]
                         :where [[?a :g/to ?b]
                                 [?a :g/to ?c]
                                 [?b :g/to ?c]]})
 
-  (time (count (q triangle-query (db redis-conn-hs))))
   (time (count (q triangle-query (db redis-conn-lf))))
-  (time (count (q triangle-query (db conn)))))
+  (time (count (q triangle-query (db redis-conn-gen))))
+  (time (count (q triangle-query (db conn))))
+  )

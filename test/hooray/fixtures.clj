@@ -46,7 +46,13 @@
                         {:type :mem :sub-type :tonsky} "hooray:mem:tonsky//data"
                         ;; {:type :mem :sub-type :core :algo :generic} "hooray:mem:core:generic//data"
                         {:type :mem :sub-type :avl :algo :generic} "hooray:mem:avl:generic//data"
-                        {:type :mem :sub-type :tonsky :algo :generic} "hooray:mem:tonsky:generic//data"})
+                        {:type :mem :sub-type :tonsky :algo :generic} "hooray:mem:tonsky:generic//data"
+
+                        #_{:type :per :sub-type :redis :algo :leapfrog :spec {:uri "redis://localhost:6379/"}}
+                        #_{:type :per :sub-type :redis :name "hello" :algo :leapfrog :spec {:uri "redis://localhost:6379/"}}
+
+                        #_{:type :per :sub-type :redis :algo :generic :spec {:uri "redis://localhost:6379/"}}
+                        #_{:type :per :sub-type :redis :name "hello" :algo :generic :spec {:uri "redis://localhost:6379/"}}})
 
 (def ^:dynamic *db-context* nil)
 
@@ -55,7 +61,9 @@
     (binding [*db-context* ctx
               *conn* (hooray/connect db-url)]
       (testing db-url
-        (f)))))
+        (f))
+      (when (satisfies? db/DropDB *conn*)
+        (db/drop-db *conn*)))))
 
 (defmacro with-each-db-option [& body]
   `(with-each-db-option* (fn [] ~@body)))
