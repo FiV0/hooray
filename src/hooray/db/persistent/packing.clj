@@ -3,7 +3,7 @@
   (:require [taoensso.nippy :as nippy])
   (:import (java.util Arrays)
            (java.nio ByteBuffer)
-           (hooray.utils ByteBufferUtil)))
+           (hooray.utils ByteBufferUtil ByteArrayUtil)))
 
 ;; TODO use ByteBuffer slice and wrap to not copy anything and work with raw arrays
 ;; TODO look at https://gist.github.com/pingles/1235344 for inspiration
@@ -23,27 +23,16 @@
 (comment
   (-> (hash {}) int->bytes bytes->int))
 
-;; LOOK for more efficient implementation
-(defn inc-ba
-  ([^"[B" b] (inc-ba b (dec (count b))))
-  ([^"[B" b idx]
-   (assert (<= 0 idx))
-   (let [val (aget b idx)]
-     (cond (and (= 0 idx) (= val Byte/MAX_VALUE))
-           (throw (ex-info "Byte Array overflow!" {}))
-           (< val Byte/MAX_VALUE)
-           (do
-             (aset-byte b idx (byte (inc val)))
-             b)
-           :else
-           (do
-             (aset-byte b idx (byte 0))
-             (recur b (dec idx)))))))
+(defn inc-ba [^"[B" b] (ByteArrayUtil/increment b))
 
 (defn copy [^"[B" b]
   (let [res (byte-array (count b))]
     (System/arraycopy b 0 res 0 (count b))
     res))
+
+(defn byte->bit-seq [b]
+  (for [i (range 7 -1 -1)]
+    (bit-and 1 (bit-shift-right b i))))
 
 (def compare-unsigned #(ByteBufferUtil/compareUnsigned %1 %2))
 
