@@ -1,5 +1,6 @@
 (ns hooray.db.persistent.fdb
-  (:require [hooray.db.persistent.protocols :as per]
+  (:require [hooray.db.persistent.packing :as pack]
+            [hooray.db.persistent.protocols :as per]
             [me.vedang.clj-fdb.FDB :as cfdb]
             [me.vedang.clj-fdb.core :as fc]
             [me.vedang.clj-fdb.key-selector :as key-selector]
@@ -7,10 +8,9 @@
             [me.vedang.clj-fdb.subspace.subspace :as fsub]
             [me.vedang.clj-fdb.transaction :as ftr]
             [taoensso.nippy :as nippy])
-  (:import (com.apple.foundationdb FDBDatabase)))
+  (:import (com.apple.foundationdb FDBDatabase KeySelector)))
 
 ;; TODO/TO consider maybe use the tuple model directly for the indices
-;; TODO add caching for subspace creation
 
 ;; A fdb object that assures the correct API version is selected.
 ;; DB instrances are created from this
@@ -19,26 +19,28 @@
 (comment
   (def db (cfdb/open fdb)))
 
+(def keyspace->subspace (memoize
+                         (fn [keyspace]
+                           (fsub/create [keyspace]))))
+
 (defn ->buffer [v] (nippy/freeze v))
 (defn ->value [b] (nippy/thaw b))
 
 (defn set-k [db keyspace k]
-  (let [subspace (fsub/create [keyspace])]
-    (fc/set db subspace k nil)))
+  (fc/set db (keyspace->subspace keyspace) k nil))
 
 (defn set-ks [db keyspace ks]
-  (let [subspace (fsub/create [keyspace])]
+  (let [subspace (keyspace->subspace keyspace)]
     (ftr/run db
       (fn [tr]
         (doseq [k ks]
           (fc/set tr subspace k nil))))))
 
 (defn delete-k [db keyspace k]
-  (let [subspace (fsub/create [keyspace])]
-    (fc/clear db subspace k)))
+  (fc/clear db (keyspace->subspace keyspace) k))
 
 (defn delete-ks [db keyspace ks]
-  (let [subspace (fsub/create [keyspace])]
+  (let [subspace (keyspace->subspace keyspace)]
     (ftr/run db
       (fn [tr]
         (doseq [k ks]
@@ -46,9 +48,6 @@
 
 (defn- third [c] (nth c 2))
 (def ^:private seperate (juxt filter remove))
-
-(defn- keyspace->subspace [keyspace]
-  (fsub/create [keyspace]))
 
 (defn upsert-ks [db ks]
   (let [key-fn #(map second %)
@@ -68,20 +67,31 @@
               deletes)))))
 
 (defn get-k [db keyspace k]
-  (let [subspace (fsub/create [keyspace])]
-    (when (fc/get db subspace k) k)))
+  (when (fc/get db (keyspace->subspace keyspace) k) k))
 
 ;; TODO figure out how to get rid of the subspace in the keys
+;; TODO figure out why first-greater-than doesn't work
 (defn get-range
+  ([db keyspace]
+   (->> (fc/get-range db (keyspace->subspace keyspace) {:coll []})
+        (map ffirst)))
+  ([db keyspace prefix-k]
+   (let [subspace (keyspace->subspace keyspace)]
+     (->> (fc/get-range2 db
+                         (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
+                         (key-selector/first-greater-or-equal (fsub/pack subspace (pack/inc-ba (pack/copy prefix-k))))
+                         #_(key-selector/first-greater-than (fsub/pack subspace prefix-k))
+                         #_{:keyfn #(update % 1 ->value)})
+          (map (comp second first)))))
   ([db keyspace start-k stop-k]
-   (let [subspace (fsub/create [keyspace])]
+   (let [subspace (keyspace->subspace keyspace)]
      (->> (fc/get-range2 db
                          (key-selector/first-greater-or-equal (fsub/pack subspace start-k))
                          (key-selector/first-greater-or-equal (fsub/pack subspace stop-k))
                          #_{:keyfn #(update % 1 ->value)})
           (map (comp second first)))))
   ([db keyspace start-k stop-k limit]
-   (let [subspace (fsub/create [keyspace])]
+   (let [subspace (keyspace->subspace keyspace)]
      (->> (fc/get-range2 db
                          (key-selector/first-greater-or-equal (fsub/pack subspace start-k))
                          (key-selector/first-greater-or-equal (fsub/pack subspace stop-k))
@@ -90,21 +100,48 @@
           (map (comp second first))))))
 
 (defn seek
+  {:arglists '([conn keyspace prefix-k] [conn keyspace prefix-k limit]
+               [conn keyspace prefix-k k] [conn keyspace prefix-k k limit])}
   ([db keyspace prefix-k]
-   (let [subspace (fsub/create [keyspace])]
+   (let [subspace (keyspace->subspace keyspace)]
+     (if (empty? prefix-k)
+       (get-range db keyspace)
+       (->> (fc/get-range2 db
+                           (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
+                           (key-selector/first-greater-or-equal (fsub/pack subspace (pack/inc-ba (pack/copy prefix-k))))
+                           #_(key-selector/first-greater-than full-k)
+                           #_{:keyfn #(update % 1 ->value)})
+            (map (comp second first))))))
+  ([db keyspace prefix-k k-or-limit]
+   (if (int? k-or-limit)
+     (if (empty? prefix-k)
+       (->> (fc/get-range db (keyspace->subspace keyspace) {:limit k-or-limit :coll []})
+            (map ffirst))
+       (let [subspace (keyspace->subspace keyspace)
+             #_#_full-k (fsub/pack subspace prefix-k)]
+         (->> (fc/get-range2 db
+                             (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
+                             (key-selector/first-greater-or-equal (fsub/pack subspace (pack/inc-ba (pack/copy prefix-k))))
+                             #_(key-selector/first-greater-than full-k)
+                             {:limit k-or-limit
+                              #_#_:keyfn #(update % 1 ->value)})
+              (map (comp second first)))))
+     (seek db keyspace prefix-k k-or-limit Integer/MAX_VALUE)))
+  ([db keyspace prefix-k k limit]
+   (let [subspace (keyspace->subspace keyspace)
+         new-k (if (empty? prefix-k)
+                 k
+                 (pack/concat-ba prefix-k k))
+         #_#_full-k (if (empty? prefix-k)
+                      (fsub/pack subspace k)
+                      (fsub/pack subspace (pack/concat-ba prefix-k k)))]
      (->> (fc/get-range2 db
-                         (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
-                         (key-selector/first-greater-than (.-end (fsub/range subspace)))
-                         #_{:keyfn #(update % 1 ->value)})
-          (map (comp second first)))))
-  ([db keyspace prefix-k limit]
-   (let [subspace (fsub/create [keyspace])]
-     (->> (fc/get-range2 db
-                         (key-selector/first-greater-or-equal (fsub/pack subspace prefix-k))
-                         (key-selector/first-greater-than (.-end (fsub/range subspace)))
+                         (key-selector/first-greater-or-equal (fsub/pack subspace new-k))
+                         (key-selector/first-greater-or-equal (fsub/pack subspace (pack/inc-ba (pack/copy prefix-k))))
+                         #_(key-selector/first-greater-than full-k)
                          {:limit limit
                           #_#_:keyfn #(update % 1 ->value)})
-          (map (comp second first))))))
+          (map (comp second first)))) ))
 
 ;; TODO add keycount manually
 ;; maybe adapt set-k/set-ks
@@ -124,23 +161,64 @@
   (get-k db "store1" (->buffer "foo"))
   (get-k db "store" (->buffer "foo1"))
 
-  (->> (for [i (range 10)]
-         (str "foo" i))
-       (map ->buffer)
+  (->> (for [i (range 200000 (- 200000 10) -1)] i)
+       (map pack/int->bytes)
        (set-ks db "store"))
 
-  (->> (get-range db "store" (->buffer "foo") (->buffer "foo2"))
-       (map ->value))
+  (import '(java.util Arrays))
 
-  (->> (get-range db "store" (->buffer "foo") (->buffer "foo5") 3)
-       (map ->value))
+  (def try-bytes->int #(try (pack/bytes->int %) (catch Exception e :some-error)))
+  (def prefix-k (Arrays/copyOfRange (pack/int->bytes 200000) 0 3))
+  (def small-k (Arrays/copyOfRange (pack/int->bytes 199993) 3 4))
 
-  (->> (seek db "store" (->buffer "foo"))
-       (map #(try (->value %) (catch Exception e :some-error))))
+  (->> (get-range db "store")
+       (map try-bytes->int))
 
-  (->> (seek db "store" (->buffer "foo") 5)
-       (map #(try (->value %) (catch Exception e :some-error))))
-  )
+  (->> (get-range db "store" prefix-k)
+       (map try-bytes->int))
+
+  (->> (get-range db "store" (pack/int->bytes (- 200000 10)) (pack/int->bytes 200000))
+       (map pack/bytes->int))
+
+  (->> (get-range db "store" (pack/int->bytes (- 200000 10)) (pack/int->bytes 200000) 3)
+       (map pack/bytes->int))
+
+  (->> (seek db "store" prefix-k)
+       (map try-bytes->int))
+
+  (->> (seek db "store" (byte-array 0))
+       (map try-bytes->int))
+
+  (->> (seek db "store" (byte-array 0) 3)
+       (map try-bytes->int))
+
+  (->> (seek db "store" prefix-k small-k)
+       (map try-bytes->int))
+
+  (->> (seek db "store" prefix-k small-k 3)
+       (map try-bytes->int)))
+
+(defrecord FDBKeyStore [conn]
+  per/KeyStore
+  (set-k [this keyspace k] (set-k conn (name keyspace) k))
+  (set-ks [this keyspace ks] (set-ks conn (name keyspace) ks))
+  (delete-k [this keyspace k] (delete-k conn (name keyspace) k))
+  (delete-ks [this keyspace ks] (delete-ks conn (name keyspace) ks))
+  (upsert-ks [this ops] (upsert-ks conn ops))
+  (get-k [this keyspace k] (get-k conn (name keyspace) k))
+  (get-range [this keyspace] (get-range conn (name keyspace)))
+  (get-range [this keyspace prefix-k] (get-range conn (name keyspace) prefix-k))
+  (get-range [this keyspace begin end] (get-range conn (name keyspace) begin end))
+  (get-range [this keyspace begin end limit] (get-range conn (name keyspace) begin end limit))
+  (seek [this keyspace prefix-k] (seek conn (name keyspace) prefix-k))
+  (seek [this keyspace prefix-k limit] (seek conn (name keyspace) prefix-k limit))
+  (seek [this keyspace prefix-k k limit] (seek conn (name keyspace) prefix-k k limit))
+  (count-ks [this keyspace] (count-ks conn (name keyspace)))
+  (count-ks [this keyspace prefix-k] (count-ks conn (name keyspace) prefix-k))
+  (count-ks [this keyspace begin end] (count-ks conn (name keyspace) begin end)))
+
+(defn ->fdb-key-store [_conn]
+  (->FDBKeyStore (cfdb/open fdb)))
 
 ;; DOC STORE
 

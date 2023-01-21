@@ -21,9 +21,9 @@
   ;; foundationdb
   org.foundationdb/fdb-java           {:mvn/version "6.3.23"}
   me.vedang/clj-fdb
-  {:git/url "https://github.com/FiV0/clj_fdb.git"
-   :git/sha "1338a75e09010674dddf45c42c3f107453295b78"}
-  #_{:local/root "../clj_fdb"}
+  #_{:git/url "https://github.com/FiV0/clj_fdb.git"
+     :git/sha "f467f2e8453e461d15999e6d46ccd9705434eb77" #_"1338a75e09010674dddf45c42c3f107453295b78"}
+  {:local/root "../clj_fdb"}
   #_{:mvn/version "0.3.0"}
 
 
