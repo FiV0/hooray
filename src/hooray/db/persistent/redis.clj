@@ -318,9 +318,7 @@
    :spec (:spec config-map)})
 
 (defn redis-connection? [conn]
-  (and (map? conn) (contains? conn :pool)
-       ;; figure out why this results in ClassCastException
-       #_(instance? (:pool conn) ConnectionPool)))
+  (instance? ConnectionPool (:pool conn)))
 
 (defn close-connection [conn]
   {:pre [(redis-connection? conn)]}

@@ -54,19 +54,19 @@
   (drop-db [this]
     (cond
       (redis/redis-connection? connection) (redis/clear-db connection)
-      (fdb/fdb-connection? connection) (fdb/close-connection connection)
+      (fdb/fdb-connection? connection) (fdb/clear-db connection)
       :else (throw (ex-info "No such connection type known!" {:conn-type (type connection)})))))
 
 (defn- ->key-store [type conn]
   (case type
     :redis (redis/->redis-key-store conn)
-    :fdb (throw (ex-info "FDB KeyStore not yet implemented!" {}))
+    :fdb (fdb/->fdb-key-store conn)
     (throw (ex-info "No such persistent backing store known!" {:type type}))))
 
 (defn- ->doc-store [type conn]
   (case type
     :redis (redis/->redis-doc-store conn)
-    :fdb (throw (ex-info "FDB DocStore not yet implemented!" {}))
+    :fdb (fdb/->fdb-doc-store conn)
     (throw (ex-info "No such persistent backing store known!" {:type type}))))
 
 (defn ->persistent-connection [{:keys [sub-type name] :as config-map}]
@@ -80,10 +80,14 @@
   ;; "hooray:per:redis:hash//localhost:6379"
   (->persistent-connection {:sub-type :redis
                             :name "hello"
-                            :spec {:uri "redis://localhost:6379/"}}))
+                            :spec {:uri "redis://localhost:6379/"}})
+  (->persistent-connection {:sub-type :fdb
+                            :name "hello"
+                            :spec {}})
+  )
 
 ;; TODO this whole connection business doesn't properly use multimethods yet
 (defmethod db/connect* :per [{:keys [sub-type _algo _name] :as uri-map}]
   (case sub-type
-    :redis (->persistent-connection uri-map)
+    (:redis :fdb) (->persistent-connection uri-map)
     (throw (ex-info "Persistent connection of this type currently not supported!" uri-map))))

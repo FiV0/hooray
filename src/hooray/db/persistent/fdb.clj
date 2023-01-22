@@ -8,7 +8,7 @@
             [me.vedang.clj-fdb.subspace.subspace :as fsub]
             [me.vedang.clj-fdb.transaction :as ftr]
             [taoensso.nippy :as nippy])
-  (:import (com.apple.foundationdb FDBDatabase KeySelector)))
+  (:import (com.apple.foundationdb Database KeySelector)))
 
 ;; TODO/TO consider maybe use the tuple model directly for the indices
 
@@ -198,13 +198,19 @@
   (->> (seek db "store" prefix-k small-k 3)
        (map try-bytes->int)))
 
+(defn- stringify-keyspace [op]
+  (update op 0 name))
+
+(comment
+  (stringify-keyspace [:doc-store (->buffer "foo") nil]))
+
 (defrecord FDBKeyStore [conn]
   per/KeyStore
   (set-k [this keyspace k] (set-k conn (name keyspace) k))
   (set-ks [this keyspace ks] (set-ks conn (name keyspace) ks))
   (delete-k [this keyspace k] (delete-k conn (name keyspace) k))
   (delete-ks [this keyspace ks] (delete-ks conn (name keyspace) ks))
-  (upsert-ks [this ops] (upsert-ks conn ops))
+  (upsert-ks [this ops] (upsert-ks conn (map stringify-keyspace ops)))
   (get-k [this keyspace k] (get-k conn (name keyspace) k))
   (get-range [this keyspace] (get-range conn (name keyspace)))
   (get-range [this keyspace prefix-k] (get-range conn (name keyspace) prefix-k))
@@ -270,7 +276,6 @@
                   (fc/clear tr subspace k)))
               deletes)))))
 
-
 (comment
   (set-kv db "doc-store" (->buffer "foo") (->buffer "bar"))
   (->value (get-kv db "doc-store" (->buffer "foo")))
@@ -287,6 +292,19 @@
   (get-kv db "doc-store" (->buffer "foo"))
   (->value (get-kv db "doc-store" (->buffer "foo1")))
   (->value (get-kv db "doc-store1" (->buffer "foo"))))
+
+(defrecord FDBDocStore [conn]
+  per/DocStore
+  (set-kv [this keyspace k v] (set-kv conn (name keyspace) k v))
+  (set-kvs [this keyspace kvs] (set-kvs conn (name keyspace) kvs))
+  (get-kv [this keyspace k] (get-kv conn (name keyspace) k))
+  (get-kvs [this keyspace ks] (get-kvs conn (name keyspace) ks))
+  (delete-kv [this keyspace k] (delete-kv conn (name keyspace) k))
+  (delete-kvs [this keyspace ks] (delete-kvs conn (name keyspace) ks))
+  (upsert-kvs [this ops] (upsert-kvs conn (map stringify-keyspace ops))))
+
+(defn ->fdb-doc-store [_conn]
+  (->FDBDocStore (cfdb/open fdb)))
 
 ;; ADMIN
 
@@ -320,7 +338,7 @@
     (cfdb/open fdb)))
 
 (defn fdb-connection? [conn]
-  (instance? conn FDBDatabase))
+  (instance? Database conn))
 
 (defn close-connection [conn]
   {:pre [(fdb-connection? conn)]}

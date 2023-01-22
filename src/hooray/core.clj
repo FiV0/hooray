@@ -91,6 +91,7 @@
                       :algo :leapfrog
                       :spec {:uri "redis://localhost:6379/"}})
 
+
   (def config-map-gen {:type :per
                        :sub-type :redis
                        :name "hello"
@@ -145,4 +146,19 @@
   (time (count (q triangle-query (db redis-conn-lf))))
   (time (count (q triangle-query (db redis-conn-gen))))
   (time (count (q triangle-query (db conn))))
+
+  (def config-lf-fdb {:type :per
+                      :sub-type :fdb
+                      :name "hello"
+                      :algo :leapfrog
+                      :spec {}})
+  (def fdb-conn-lf (connect config-lf-fdb))
+  (db/drop-db fdb-conn-lf)
+
+  (do
+    (db/drop-db fdb-conn-lf)
+    (def random-graph (g-gen/random-graph 10 0.3) #_(g-gen/complete-graph 100))
+    (transact fdb-conn-lf (g-gen/graph->ops random-graph)))
+
+
   )
