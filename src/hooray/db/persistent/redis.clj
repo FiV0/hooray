@@ -221,18 +221,16 @@
 (defn delete-kvs [conn keyspace ks]
   (wcar conn (apply car/hdel keyspace (map car/raw ks))))
 
-(defn- fourth [c]
-  (nth c 3))
 
 (defn upsert-kvs
   "The kvs are [keyspace kv op] pairs. Anything truthy will be considered an assert.
   In case of delete kv should just be a single a key."
   [conn ks]
   (wcar conn (car/multi))
-  (let [key-fn (map second)
-        [asserts deletes] (->> (seperate fourth ks)
+  (let [key-fn #(map second %)
+        [asserts deletes] (->> (seperate third ks)
                                (map #(group-by first %)))
-        asserts (update-vals asserts #(map (fn [[_ k v]] [k v]) %))
+        asserts (update-vals asserts key-fn)
         deletes (update-vals deletes key-fn)]
     (run! (fn [[keyspace kvs]] (set-kvs conn keyspace kvs)) asserts)
     (run! (fn [[keyspace ks]] (delete-kvs conn keyspace ks)) deletes))
@@ -254,6 +252,7 @@
   (get-kv wcar-opts :doc-store (->buffer "foo"))
   (->value (get-kv wcar-opts :doc-store (->buffer "foo1")))
   (->value (get-kv wcar-opts :doc-store1 (->buffer "foo"))))
+
 
 (defrecord RedisDocStore [conn]
   per/DocStore

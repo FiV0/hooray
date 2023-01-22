@@ -55,7 +55,7 @@
 (defn create-doc-store-txs [[e a v _ts op]]
   (let [[hea haa hva] (map (comp pack/pack-hash-array pack/hash) [e a v])
         [eb ab vb] (map pack/->buffer [e a v])]
-    [[:doc-store hea eb op] [:doc-store haa ab op] [:doc-store hva vb op]]))
+    [[:doc-store [hea eb] op] [:doc-store [haa ab] op] [:doc-store [hva vb] op]]))
 
 (defn- transact* [{:keys [key-store doc-store] :as _conn} tx-data]
   (try
