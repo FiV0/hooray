@@ -10,7 +10,8 @@
             [hooray.query.spec :as hooray-spec]
             [hooray.util :as util])
   (:import (hooray.db.memory.graph MemoryGraph)
-           (hooray.db.memory.graph_index MemoryGraphIndexed)))
+           (hooray.db.memory.graph_index MemoryGraphIndexed)
+           (hooray.db.persistent.graph PersistentGraph)))
 
 (defn- ->return-maps [{:keys [keys syms strs]}]
   (let [ks (or (some->> keys (mapv keyword))
@@ -78,6 +79,14 @@
 
 (defmethod join MemoryGraph [compiled-q db]
   (hj/join compiled-q db))
+
+(defmethod join PersistentGraph [compiled-q {:keys [opts] :as db}]
+  (let [algo (-> opts :uri-map :algo)]
+    (case algo
+      (nil :hash) (hj/join compiled-q db)
+      :leapfrog (lf/join compiled-q db)
+      :generic (gj/join compiled-q db)
+      (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
 (defmethod join MemoryGraphIndexed [compiled-q {:keys [opts] :as db}]
   (let [algo (-> opts :uri-map :algo)]

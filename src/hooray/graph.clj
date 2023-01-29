@@ -30,7 +30,9 @@
   (resolve-tuple [this tuple])
   (get-iterator
     [this tuple]
-    [this tuple type]))
+    [this tuple type])
+  (hash->value [this h])
+  (hashes->values [this hs]))
 
 (defprotocol BitempGraph
   (in-between [this t1 t2] "Creates a graph with only facts "))

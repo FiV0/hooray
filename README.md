@@ -91,6 +91,39 @@ Currently the repository implements 3 join algorithms:
 Some others that might be interesting to add for comparison.
 - Yannakakis algorithm ( the standard algorithm for non-cyclic queries)
 
+### Persistency
+
+There are also two remote persistent key/value store options for Redis and FoundationDB. The queries are
+still very slow as there is no key/value cache for a query. This part is even more experimental
+than the repository itself. These stores currently do not store any history. The idea here is
+to get a understanding if it's possible to build a DB on a remote key/value store to get separation
+of storage from compute without the need to build an extra storage solution.
+
+```clj
+(ns persistency
+  (:require [hooray.core :as h]
+            [hooray.graph-gen :as g-gen]))
+
+(def config-map-redis {:type :per
+                       :sub-type :redis
+                       :name "hello"
+                       :algo :leapfrog
+                       :spec {:uri "redis://localhost:6379/"}})
+
+(def redis-conn (h/connect config-map-redis))
+
+(def random-graph (g-gen/random-graph 300 0.3))
+(h/transact redis-conn (g-gen/graph->ops random-graph))
+
+(def triangle-query '{:find [?a ?b ?c]
+                      :where [[?a :g/to ?b]
+                              [?a :g/to ?c]
+                              [?b :g/to ?c]]})
+
+(time (count (h/q triangle-query (h/db redis-conn))))
+;; "Elapsed time: 22029.502057 msecs"
+```
+
 ### Inspiration
 Some projects I have looked at and drawn some inspiration from
 
@@ -103,7 +136,7 @@ Some possible directions and improvements of this repository.
 - implement some more join algorithms
 - use B-trees
 - create a test suite to compare different join algorithms
-- persistency
+- persistency with history
 - views (Differential Dataflow, Materialized views (see [relic](https://github.com/wotbrew/relic)))
 
 ## License

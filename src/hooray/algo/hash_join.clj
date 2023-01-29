@@ -4,7 +4,6 @@
             [hooray.util :as util]))
 
 ;; hash join strategy on clauses
-
 (defn create-lookup [pattern result var->binding]
   (let [size (count result)]
     (mapv (fn [v]

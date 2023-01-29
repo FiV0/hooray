@@ -2,11 +2,11 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [hooray.db :as db]
-            [hooray.db.memory.graph-index :as g-index]
+            [hooray.db.iterator :as itr]
             [hooray.graph :as graph]
             [hooray.query.spec :as h-spec]
             [hooray.util :as util]
-            [medley.core :refer [map-kv]]))
+            [hooray.util.lru :as lru]))
 
 ;; Leapfrog Triejoin
 ;; https://arxiv.org/pdf/1210.0481.pdf
@@ -23,21 +23,21 @@
   (def q-conformed (s/conform ::h-spec/query q)))
 
 (defn- iterator-key [iterators p]
-  (g-index/key (nth iterators p)))
+  (itr/key (nth iterators p)))
 
 (defn- iterator-next [iterators p]
   {:pre [(vector? iterators)]}
-  (update iterators p g-index/next))
+  (update iterators p itr/next))
 
 (defn- iterator-seek [iterators p x]
   {:pre [(vector? iterators)]}
-  (update iterators p #(g-index/seek % x)))
+  (update iterators p #(itr/seek % x)))
 
 (defn- iterator-end? [iterators p]
-  (g-index/at-end? (nth iterators p)))
+  (itr/at-end? (nth iterators p)))
 
 (defn- lookup-row [graph row]
-  (mapv #(g-index/hash->value graph %) row))
+  (into [] (graph/hashes->values graph row)))
 
 (defn- next-var-index [pattern var]
   (cond
@@ -48,18 +48,19 @@
 
 (def idx->name {0 :e 1 :a 2 :v})
 
-(defn- pos->literal [var? var->bindings partial-row]
-  (cond (util/constant? var?) (g-index/hash var?)
+(defn- pos->literal [var? var->bindings partial-row cache]
+  (cond (util/constant? var?)
+        (lru/get cache var?)
         (< (var->bindings var?) (clojure.core/count partial-row))
         (nth partial-row (var->bindings var?))
         :else nil))
 
-(defn partial->tuple-fn [pattern var->bindings]
+(defn partial->tuple-fn [pattern var->bindings cache]
   (fn partial-row->tuple [partial-row next-var]
     (let [next-var-idx (next-var-index pattern next-var)
           [i j] (vec (set/difference #{0 1 2} #{next-var-idx}))
-          i-literal (pos->literal (nth pattern i) var->bindings partial-row)
-          j-literal (pos->literal (nth pattern j) var->bindings partial-row)]
+          i-literal (pos->literal (nth pattern i) var->bindings partial-row cache)
+          j-literal (pos->literal (nth pattern j) var->bindings partial-row cache)]
       (cond-> {:triple-order [] :triple []}
 
         i-literal
@@ -74,9 +75,9 @@
         (-> (update :triple-order conj (idx->name next-var-idx))
             (update :triple conj next-var))))))
 
-(defn vars->tuple-fns [where var->bindings]
+(defn vars->tuple-fns [where var->bindings cache]
   (->>
-   (map #(vector (filter util/variable? %) (partial->tuple-fn % var->bindings)) where)
+   (map #(vector (filter util/variable? %) (partial->tuple-fn % var->bindings cache)) where)
    (reduce (fn [mapping [clause tuple-fn]]
              (reduce #(update %1 %2 (fnil conj []) tuple-fn) mapping clause)) {})))
 
@@ -98,7 +99,7 @@
 
 (defn- iterators-sorted? [{:keys [iterators position]}]
   (let [heads (->> (concat (drop position iterators) (take position iterators))
-                   (map g-index/key))]
+                   (map itr/key))]
     (= heads (sort heads))))
 
 (s/def ::iterators (s/and (s/keys :req-un [:leap/iterators :leap/position])
@@ -106,20 +107,21 @@
 
 (defrecord Iterators [iterators position])
 
-(defn ->iterators [iterators]
-  (->Iterators (vec (sort-by #(g-index/key %) iterators)) 0))
+(defn ->iterators
+  ([iterators] (->iterators compare iterators))
+  ([compare-fn iterators] (->Iterators (vec (sort-by #(itr/key %) compare-fn iterators)) 0)))
 
 (s/fdef var->iterators :args (s/cat :var util/variable?
                                     :partial-row (s/and vector? (s/* int?))
                                     :vars->tuple-fns ::vars->tuple-fns
                                     :graph #(satisfies? graph/GraphIndex %)))
 
-(defn var->iterators [var partial-row vars->tuple-fns graph]
+(defn var->iterators [var partial-row vars->tuple-fns graph compare-fn]
   (let [graph-type (-> graph :opts :type)]
     (->> (vars->tuple-fns var)
          (map (fn [partial-row->tuple-fn]
                 (graph/get-iterator graph (partial-row->tuple-fn partial-row var) graph-type)))
-         ->iterators)))
+         (->iterators compare-fn))))
 
 (s/fdef leapfrog-next :args (s/cat :iterators ::iterators))
 
@@ -148,18 +150,23 @@
           ;; dummy var to bottom out
           var-join-order (conj var-join-order (gensym "?dummy"))
           graph (db/graph db)
-          vars->tuple-fns (vars->tuple-fns where var->bindings)
-          iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph)]
+          compare-fn (db/get-comp db)
+          cache (lru/create-lru-cache 128 (db/get-hash-fn db))
+          vars->tuple-fns (vars->tuple-fns where var->bindings cache)
+          iterators (var->iterators (first var-join-order) [] vars->tuple-fns graph compare-fn)]
       (loop [res nil partial-row [] var-level 0 iterators iterators iterator-stack []]
         (if (= var-level max-level) ;; bottomed out
-          (recur (cons partial-row res) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))
+          (do
+            ;; (println "bottom" (map pack/bb->hash partial-row))
+            (recur (cons partial-row res) (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack)))
 
           (let [[val new-iterators] (leapfrog-next iterators)]
             (cond (not (nil? val))
                   (let [partial-row (conj partial-row val)
                         var-level (inc var-level)]
+                    ;; (println "not nil" (map pack/bb->hash partial-row))
                     (recur res partial-row var-level
-                           (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph)
+                           (var->iterators (nth var-join-order var-level) partial-row vars->tuple-fns graph compare-fn)
                            (conj iterator-stack new-iterators)))
 
                   ;; finished
@@ -168,7 +175,9 @@
 
                   ;; moving up
                   :else
-                  (recur res (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack)))))))
+                  (do
+                    ;; (println "moving up" (map pack/bb->hash partial-row))
+                    (recur res (pop partial-row) (dec var-level) (peek iterator-stack) (pop iterator-stack))))))))
     (throw (ex-info "Query must contain where clause!" {:query query}))))
 
 (comment
