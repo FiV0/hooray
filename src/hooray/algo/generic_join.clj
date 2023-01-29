@@ -139,7 +139,7 @@
   (mapcat #(extend-prefix extenders %) prefixes))
 
 (defn- lookup-row [graph row]
-  (into [] (graph/hashs->values graph row)))
+  (into [] (graph/hashes->values graph row)))
 
 (defn join [{:keys [conformed-query query var-join-order _var->bindings] :as _compiled-q} db]
   {:pre [(vector? var-join-order)]}

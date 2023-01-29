@@ -32,7 +32,7 @@
     [this tuple]
     [this tuple type])
   (hash->value [this h])
-  (hashs->values [this hs]))
+  (hashes->values [this hs]))
 
 (defprotocol BitempGraph
   (in-between [this t1 t2] "Creates a graph with only facts "))

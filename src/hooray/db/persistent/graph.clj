@@ -48,7 +48,7 @@
 
   (hash->value [this h] (-> (proto/get-kv doc-store :doc-store (cond-> h (pack/byte-buffer? h) pack/bb-unwrap))
                             ->value))
-  (hashs->values [this hs]
+  (hashes->values [this hs]
     (when (seq hs)
       (->> (proto/get-kvs doc-store :doc-store
                           (cond->> hs

@@ -37,7 +37,7 @@
   (itr/at-end? (nth iterators p)))
 
 (defn- lookup-row [graph row]
-  (into [] (graph/hashs->values graph row)))
+  (into [] (graph/hashes->values graph row)))
 
 (defn- next-var-index [pattern var]
   (cond

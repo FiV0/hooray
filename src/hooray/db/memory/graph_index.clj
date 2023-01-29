@@ -60,7 +60,7 @@
   (get-iterator [this tuple type] (get-iterator* this tuple type))
 
   (hash->value [this h] (get doc-store h))
-  (hashs->values [this hs] (map #(get doc-store %) hs)))
+  (hashes->values [this hs] (map #(get doc-store %) hs)))
 
 (defmethod print-method MemoryGraphIndexed [_g ^java.io.Writer w]
   (.write w "MemoryGraphIndexed{}"))
