@@ -90,14 +90,15 @@ Currently the repository implements 3 join algorithms:
 
 Some others that might be interesting to add for comparison.
 - Yannakakis algorithm ( the standard algorithm for non-cyclic queries)
+- Something that combines standard binary joins with WCOJ (see Free Join)
 
 ### Persistency
 
-There are also two remote persistent key/value store options for Redis and FoundationDB. The queries are
+There are two remote persistent key/value store options for Redis and FoundationDB. The queries are
 still very slow as there is no key/value cache for a query. This part is even more experimental
-than the repository itself. These stores currently do not store any history. The idea here is
-to get a understanding if it's possible to build a DB on a remote key/value store to get separation
-of storage from compute without the need to build an extra storage solution.
+than the repository itself. These stores currently do not store any history. The idea is
+to get an understanding if it's possible to build a DB on a remote key/value store to get separation
+of storage from compute without the need to build a custom storage solution.
 
 ```clj
 (ns persistency
