@@ -142,3 +142,13 @@
 (s/def ::persistent-tuple (s/and (s/keys :req-un [:persistent/triple ::triple-order])
                                  (fn [{:keys [triple triple-order]}]
                                    (= (count triple) (count triple-order)))))
+
+;; logical plan
+;; :where clause -> scan order of returned tuples
+;; :wheres -> join order of returned tuples
+;; :find -> project
+;; :keys -> ?
+;; :or-join -> semi-join
+;; :not-join -> anti-join
+
+(defn )
