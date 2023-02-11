@@ -9,7 +9,7 @@
 
 (s/def ::logic-var
   (s/and simple-symbol?
-         (comp #(str/starts-with? % "?") name)))
+         #_(comp #(str/starts-with? % "?") name)))
 
 (s/def ::aggregate
   (s/cat :aggregate simple-symbol?
@@ -62,7 +62,58 @@
   (s/and (s/coll-of #{:e :a :v} :distinct true :kind vector? :min-count 1 :max-count 3)
          (s/conformer identity vec)))
 
-(s/def ::term (s/or :triple ::triple))
+(defn- expression-spec [sym spec]
+  (s/and seq?
+         #(= sym (first %))
+         (s/conformer next (fn [v] [sym v]))
+         spec))
+
+(s/def ::args-list (s/coll-of ::logic-var :kind vector? :min-count 1))
+
+(s/def ::and (expression-spec 'and (s/+ ::term)))
+
+(s/def ::or-branches
+  (s/+ (s/and (s/or :term ::term
+                    :and ::and)
+              (s/conformer (fn [[type arg]]
+                             (case type
+                               :term [arg]
+                               :and arg))))))
+
+(s/def ::or-join
+  (expression-spec 'or-join (s/cat :args ::args-list
+                                   :branches ::or-branches)))
+
+(s/def ::not-join
+  (expression-spec 'not-join (s/cat :args ::args-list
+                                    :terms (s/+ ::term))))
+
+(def ^:private built-ins '#{and})
+
+;; need to restrict here to what we support
+(s/def ::fn (s/and symbol? (complement built-ins)))
+
+;; would be nice to support any kind of destructuring here
+(s/def ::binding  any?)
+
+
+(s/def ::fn-call (s/and seq?
+                        (s/cat :fn ::fn
+                               :args (s/* (s/or :fn-call ::fn-call
+                                                :logic-var ::logic-var
+                                                :literal ::value)))))
+
+(s/def ::expression
+  (s/and vector? (s/cat :fn-call ::fn-call
+                        :binding (s/? ::binding))))
+
+;; ranges probably need to tackled separately
+(s/def ::term
+  (s/or :triple ::triple
+        :not-join ::not-join
+        :or-join ::or-join
+        :expression ::expression))
+
 (s/def ::term-unique (s/or :triple ::triple-unique))
 
 (s/def ::where (s/coll-of ::term :kind vector?))
@@ -86,6 +137,8 @@
                       :explain (s/explain-data ::query query)}))
     query))
 
+(defrecord ConformedQuery [query conformed-query])
+
 ;; TODO maybe write custom IllegalArgumentException
 (defn conform-query
   ([query] (conform-query query {}))
@@ -96,7 +149,7 @@
        (throw  (ex-info "Malformed query"
                         {:query query
                          :explain (s/explain-data query-spec query)})))
-     conformed-query)))
+     (->ConformedQuery query conform-query))))
 
 (defn wildcard? [v] (= v '_))
 
@@ -142,13 +195,3 @@
 (s/def ::persistent-tuple (s/and (s/keys :req-un [:persistent/triple ::triple-order])
                                  (fn [{:keys [triple triple-order]}]
                                    (= (count triple) (count triple-order)))))
-
-;; logical plan
-;; :where clause -> scan order of returned tuples
-;; :wheres -> join order of returned tuples
-;; :find -> project
-;; :keys -> ?
-;; :or-join -> semi-join
-;; :not-join -> anti-join
-
-(defn )
