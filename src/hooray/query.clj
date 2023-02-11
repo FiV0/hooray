@@ -6,6 +6,7 @@
             [hooray.db.memory]
             [hooray.db.memory.graph]
             [hooray.db.memory.graph-index]
+            [hooray.db.persistent]
             [hooray.graph]
             [hooray.query.spec :as hooray-spec]
             [hooray.util :as util])
