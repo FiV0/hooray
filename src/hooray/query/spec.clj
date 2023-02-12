@@ -107,6 +107,12 @@
   (s/and vector? (s/cat :fn-call ::fn-call
                         :binding (s/? ::binding))))
 
+(s/def ::subquery
+  (s/and seq?
+         #(= 'q (first %))
+         (s/conformer next (fn [v] (list 'q v)))
+         ::query))
+
 ;; ranges probably need to tackled separately
 (s/def ::term
   (s/or :triple ::triple
@@ -149,7 +155,7 @@
        (throw  (ex-info "Malformed query"
                         {:query query
                          :explain (s/explain-data query-spec query)})))
-     (->ConformedQuery query conform-query))))
+     (->ConformedQuery query conformed-query))))
 
 (defn wildcard? [v] (= v '_))
 
