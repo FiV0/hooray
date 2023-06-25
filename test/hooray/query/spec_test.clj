@@ -9,7 +9,7 @@
                                          [b :attr2 c]
                                          [c :attr3 foo]
                                          [c :attr4 "bar"]
-                                         [(* (+ a b) c) d] ;; expresion with binding
+                                         [(* (+ a b) c) d] ;; expression with binding
                                          [(odd? d)]        ;; predicate call
                                          (not-join [e]
                                                    [e :bla :toto])

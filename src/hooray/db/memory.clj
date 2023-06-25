@@ -58,21 +58,10 @@
         db (->MemoryDatabase (bi-graph/memory-bitemp-graph) [] (util/now) opts)]
     (->MemoryConnection name (atom {:db db}) type)))
 
-(defn- map->datoms [m ts]
-  (let [eid (or (:db/id m) (random-uuid))]
-    (->> (dissoc m :db/id)
-         (map (fn [[k v]] (->Datom eid k v ts true))))))
-
-(defn transaction->datoms [transaction ts]
-  (cond
-    (map? transaction) (map->datoms transaction ts)
-    (= :db/add (first transaction)) [(apply ->Datom (concat (rest transaction) [ts true]))]
-    (= :db/retract (first transaction)) [(apply ->Datom (concat (rest transaction) [ts false]))]))
-
 (defn transact* [{:keys [state type] :as _connection} tx-data]
   (case type
     :mem (s/assert :hooray/tx-data tx-data)
-    :bi-mem nil
+    ;; :bi-mem nil
     (throw (ex-info "No such connection type!" {:type type})))
   (let [ts (util/now)
         ;; datoms (mapcat #(transaction->datoms % ts) tx-data)

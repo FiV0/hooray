@@ -37,7 +37,8 @@
   )
 
 (defn variable? [v]
-  (and (symbol? v) (= \? (first (name v)))))
+  (simple-symbol? v)
+  #_(and (symbol? v) (= \? (first (name v)))))
 
 (defn wildcard? [v]
   (= v '_))
