@@ -10,6 +10,8 @@
   clojure.java-time/clojure.java-time {:mvn/version "0.3.3"}
   medley/medley                       {:mvn/version "1.4.0"}
   spootnik/unilog                     {:mvn/version "0.7.30"}
+  integrant/integrant                 {:mvn/version "0.8.1"}
+
 
   ;; hashing and byte array utils
   com.google.guava/guava              {:mvn/version "31.1-jre"}

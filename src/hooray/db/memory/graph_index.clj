@@ -595,6 +595,13 @@
 
 (def ^:private iterator-types #{:simple :core :avl :tonsky})
 
+(defn seq->leap-iterator [s type]
+  (let [index (into (sorted-set* type) s)]
+    (case type
+      :core (->leap-iterator-core index 1)
+      :avl (->leap-iterator-avl index 1)
+      :tonsky (->leap-iterator-tonsky index 1))))
+
 #_(s/fdef get-iterator*
     :args (s/cat :graph any? :tuple ::tuple :type iterator-types))
 ;; (require '[clojure.spec.test.alpha :as st])

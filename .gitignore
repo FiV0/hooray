@@ -12,3 +12,7 @@ resources/public/ui
 out
 .#*
 .clj-kondo/.cache
+.clj-kondo/babashka
+.clj-kondo/rewrite-clj
+.clj-kondo/taoensso
+.lsp

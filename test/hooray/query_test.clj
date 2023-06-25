@@ -111,3 +111,75 @@
                                   [e :last-name "Ivanov"]]}
                         db))
           "throws on arity mismatch")))
+
+(t/deftest test-query-with-in-bindings
+  (h/transact *conn* [{:db/id :ivan :name "Ivan" :last-name "Ivanov"}
+                      {:db/id :petr :name "Petr" :last-name "Petrov"}])
+
+  #_(t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
+                                      '{:find [e]
+                                        :in [$ name]
+                                        :where [[e :name name]]}
+                                      "Ivan")))
+
+  (t/testing "the db var is optional (only option for now)"
+    (t/is (= [[:ivan]]
+             (h/q
+              '{:find [e]
+                :in [name]
+                :where [[e :name name]]}
+              "Ivan"))))
+
+  #_#_#_#_#_#_#_#_
+  (t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
+                                    '{:find [e]
+                                      :in [$ name last-name]
+                                      :where [[e :name name]
+                                              [e :last-name last-name]]}
+                                    "Ivan" "Ivanov")))
+
+  (t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
+                                    '{:find [e]
+                                      :in [$ [name]]
+                                      :where [[e :name name]]}
+                                    ["Ivan"])))
+
+  (t/is (= #{[(:xt/id ivan)] [(:xt/id petr)]}
+           (xt/q (xt/db *conn*)
+                 '{:find [e]
+                   :in [$ [[name]]]
+                   :where [[e :name name]]}
+                 [["Ivan"] ["Petr"]])))
+
+  (t/is (= #{[(:xt/id ivan)] [(:xt/id petr)]}
+           (xt/q (xt/db *conn*)
+                 '{:find [e]
+                   :in [$ [name ...]]
+                   :where [[e :name name]]}
+                 ["Ivan" "Petr"])))
+
+  (t/testing "can access the db"
+    (t/is (= #{["class xtdb.query.QueryDatasource"]} (xt/q (xt/db *conn*) '{:find [ts]
+                                                                            :in [$]
+                                                                            :where [[(str t) ts]
+                                                                                    [(type $) t]]}))))
+  (t/testing "where clause is optional"
+    (t/is (= #{[1]} (xt/q (xt/db *conn*)
+                          '{:find [x]
+                            :in [$ x]}
+                          1))))
+
+  (t/testing "can use both args and in"
+    (t/is (= #{[2]} (xt/q (xt/db *conn*)
+                          '{:find [x]
+                            :in [$ [x ...]]
+                            :args [{:x 1}
+                                   {:x 2}]}
+                          [2 3]))))
+
+  (t/testing "var bindings need to be distinct"
+    (t/is (thrown-with-msg?
+           IllegalArgumentException
+           #"In binding variables not distinct"
+           (xt/q (xt/db *conn*) '{:find [x]
+                                  :in [$ [x x]]} [1 1])))))
