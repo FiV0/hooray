@@ -14,7 +14,6 @@
                       :where [[e :name "Ivan"]]}
                     (h/db *conn*)))))
 
-
 (t/deftest test-basic-query
   (h/transact *conn* [{:db/id :ivan :name "Ivan" :last-name "Ivanov"} {:db/id :petr :name "Petr" :last-name "Petrov"}])
 
@@ -70,3 +69,45 @@
                                        [p1 :last-name name]
                                        [p1 :name "Smith"]]}
                   (h/db *conn*))))))
+
+(t/deftest test-returning-maps
+  (h/transact *conn* [{:xt/id :ivan :name "Ivan" :last-name "Ivanov"}
+                      {:xt/id :petr :name "Petr" :last-name "Petrov"}])
+
+  (let [db (h/db *conn*)]
+    (t/is (= #{{:user/name "Ivan", :user/last-name "Ivanov"}
+               {:user/name "Petr", :user/last-name "Petrov"}}
+             (-> (h/q '{:find [?name ?last-name]
+                        :keys [user/name user/last-name]
+                        :where [[e :name ?name]
+                                [e :last-name ?last-name]]}
+                      db)
+                 set)))
+
+    (t/is (= #{{'user/name "Ivan", 'user/last-name "Ivanov"}
+               {'user/name "Petr", 'user/last-name "Petrov"}}
+             (-> (h/q '{:find [?name ?last-name]
+                        :syms [user/name user/last-name]
+                        :where [[e :name ?name]
+                                [e :last-name ?last-name]]}
+                      db)
+                 set)))
+
+    (t/is (= #{{"name" "Ivan", "last-name" "Ivanov"}
+               {"name" "Petr", "last-name" "Petrov"}}
+             (-> (h/q '{:find [?name ?last-name]
+                        :strs [name last-name]
+                        :where [[e :name ?name]
+                                [e :last-name ?last-name]]}
+                      db)
+                 set)))
+
+    (t/is (thrown? IllegalArgumentException
+                   (h/q '{:find [name last-name]
+                          :keys [name]
+                          :where [[e :name name]
+                                  [e :last-name last-name]
+                                  [e :name "Ivan"]
+                                  [e :last-name "Ivanov"]]}
+                        db))
+          "throws on arity mismatch")))

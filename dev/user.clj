@@ -26,6 +26,7 @@
 (better-logging!)
 (s/check-asserts true)
 (st/instrument)
+(set! *print-namespace-maps* false)
 
 (comment
   (repl/set-refresh-dirs (io/file "src") #_(io/file "dev") (io/file "test"))

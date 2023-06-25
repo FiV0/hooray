@@ -151,6 +151,9 @@
   ([query {:keys [unique?] :as _opts}]
    (let [query-spec (if unique? ::query-unique ::query)
          conformed-query (s/conform query-spec query)]
+     (when-let [map-keys ((some-fn :keys :syms :strs) query)]
+       (when-not (= (count (:find query)) (count map-keys))
+         (throw (IllegalArgumentException. "find and map-syntax arity mismatch!"))))
      (when (s/invalid? conformed-query)
        (throw  (ex-info "Malformed query"
                         {:query query
