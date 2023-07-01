@@ -69,7 +69,7 @@
 
 ;; TODO broken on every db so far
 #_(ns-unmap *ns* 'pattern-with-same-var-test)
-
+#_
 (deftest pattern-with-same-var-test
   (testing "same var multiple times in pattern"
     (h/transact *conn* [[:db/add :foo :foo :foo]

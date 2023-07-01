@@ -1,5 +1,6 @@
 (ns hooray.query
-  (:require [hooray.algo.generic-join :as gj]
+  (:require [clojure.core.match :refer [match]]
+            [hooray.algo.generic-join :as gj]
             [hooray.algo.hash-join :as hj]
             [hooray.algo.leapfrog :as lf]
             [hooray.db :as db]
@@ -45,14 +46,55 @@
               find))
       (throw (ex-info "`find` can't be empty!" {:query query})))))
 
-(defn var-join-order [{:keys [where]} _db]
-  (->> (mapcat identity where)
-       (filter util/variable?)
-       distinct
-       vec))
+;; input creation
 
-(defn query-plan [q db]
-  (let [var-join-order (var-join-order q db)]
+(defn inputs->rows [{:keys [conformed-query] :as _compiled-query} inputs]
+  (reduce (fn [acc [binding input]]
+            (match binding
+              [:scalar _var-name] (mapv #(conj %1 input) acc)
+              [:collection [_var-name]] (mapcat (fn [item] (mapv #(conj %1 item) acc)) input)
+              [:tuple var-names] (do (when-not (= (count var-names) (count input))
+                                       (throw (ex-info "Tuple binding arity mismatch!" {:tuple-binding var-names :input input})))
+                                     (mapv #(into %1 input) acc))
+              [:relation [_var-names]] (mapcat (fn [tuple] (mapv #(into %1 tuple) acc)) input)
+              :else (throw (ex-info "Unrecognized in binding!" {:binding binding :input input}))))
+          [[]]
+          (zipmap (-> conformed-query :in :bindings) inputs)))
+
+(defn in->var-order [{:keys [bindings]}]
+  (let [res (reduce (fn [acc binding]
+                      (match binding
+                        [:scalar var-name]  (conj acc var-name)
+                        [:collection [var-name]]  (conj acc var-name)
+                        [:tuple var-names] (into acc var-names)
+                        [:relation [var-names]] (into acc var-names)
+                        :else (throw (ex-info "Unrecognized in binding!" {:binding binding}))))
+                    []
+                    bindings)]
+    (when-not (= res (distinct res))
+      (throw (ex-info "In variables need to be distinct!" {:bindings bindings})))
+    res))
+
+(defn var-join-order [{:keys [conformed-query query]} _db]
+  (let [where (:where query)
+        in (:in conformed-query)
+        vars (concat (in->var-order in)
+                     (->> (mapcat identity where)
+                          (filter util/variable?)))]
+    (->> vars distinct vec)))
+
+
+(comment
+  (require '[clojure.spec.alpha :as s])
+
+  (-> (hooray-spec/conform-query '{:find [e]
+                                   :in [name]
+                                   :where [[e :name name]]})
+      (var-join-order nil)))
+
+
+(defn query-plan [conformed-q db]
+  (let [var-join-order (var-join-order conformed-q db)]
     {:var-join-order var-join-order
      :var->bindings (zipmap var-join-order (range))}))
 
@@ -65,11 +107,11 @@
 
 (defn compile-query [q db]
   (let [q (replace-wildcards q)
-        q-plan (query-plan q db)
-        conformed-q  (hooray-spec/conform-query q {:unique? (unique-variable-db? db)})]
+        conformed-q (hooray-spec/conform-query q {:unique? (unique-variable-db? db)})
+        q-plan (query-plan conformed-q db)]
     (-> q-plan
         (assoc :query q
-               :conformed-query conformed-q))))
+               :conformed-query (:conformed-query conformed-q)))))
 
 ;; TODO move this down to the actual namespaces
 (defn join-dispatch-fn [_compiled-q db] (type (db/graph db)))
@@ -96,13 +138,25 @@
       :generic (gj/join compiled-q db)
       (throw (ex-info "No such algorithm known!" {:algo algo})))))
 
-(defn query [q db]
+(defn query [q db inputs]
   (let [compiled-q (compile-query q db)
         find-fn (compile-find compiled-q)
-        return-maps? (seq (select-keys q [:keys :syms :strs]))]
-    (cond->> (join compiled-q db)
+        return-maps? (seq (select-keys q [:keys :syms :strs]))
+        start-rows (inputs->rows compiled-q inputs)]
+    (cond->> (join (assoc compiled-q :start-rows start-rows) db)
       true (map find-fn)
       return-maps? (map (->return-maps q)))))
+
+(comment
+  (require 'sc.api)
+  (sc.api/letsc [1 -1]
+                (inputs->rows (-> conformed)compiled-q inputs)
+                #_start-rows
+                #_(join (assoc compiled-q :start-rows start-rows) db)
+                #_compiled-q
+                ;; (compile-query q db)
+                ))
+
 
 (comment
   (require '[clojure.edn :as edn])

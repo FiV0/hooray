@@ -12,11 +12,10 @@
 (defn transact [conn tx-data]
   (db/transact conn tx-data))
 
-(defn q [query & inputs]
-  {:pre [(>= (count inputs) 1)]}
-  (when (> (count inputs) 1)
-    (log/warn "Hooray currently only supports one source!"))
-  (query/query query (first inputs)))
+(defn q [query db & inputs]
+  (when (->> inputs (filter db/db?) seq)
+    (ex-info "Hooray currently only supports one source!" {:inputs inputs}))
+  (query/query query db inputs))
 
 (defn db [conn]
   #_{:pre [(instance? MemoryConnection conn)]}

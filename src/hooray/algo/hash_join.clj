@@ -30,16 +30,17 @@
         :let [lookup (create-lookup pattern lrow var->bindings)]
         rrow (->> (g/resolve-triple graph lookup)
                   (remove-duplicates lookup))]
-    (concat lrow rrow)))
+    (into lrow rrow)))
 
-(defn join [{:keys [query var->bindings] :as _compiled-q} db]
+(defn join [{:keys [query var->bindings start-rows] :as _compiled-q} db]
   (if-let [where (:where query)]
     (if (seq where)
       (let [graph (db/graph db)
             first-pattern (first where)
-            first-results (->> (g/resolve-triple graph first-pattern)
-                               (map #(remove-duplicates first-pattern %)))
+            first-results (or start-rows
+                              (->> (g/resolve-triple graph first-pattern)
+                                   (map #(remove-duplicates first-pattern %))))
             ljoin #(left-join %2 %1 graph var->bindings)]
-        (reduce ljoin first-results (rest where)))
+        (reduce ljoin start-rows #_first-results where #_(cond-> where start-rows rest)))
       (throw (ex-info "Where can't be empty!" {:where where})))
     (throw (ex-info "Query must contain where clause!" {:query query}))))

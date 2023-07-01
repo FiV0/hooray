@@ -79,6 +79,7 @@
 (defn connect [uri]
   (connect* (parse-uri uri)))
 
+
 ;; mostly copied from datomic.api
 (defprotocol Database
   (as-of [this t] "Retrieves a database as of a given moment, inclusive")
@@ -86,6 +87,10 @@
   (entity [this id] "Returns an entity for an identifier")
   (get-comp [this] "Returns the key comparator for this database.")
   (get-hash-fn [this] "Returns the key hash-fn."))
+
+
+(defn db? [db]
+  (satisfies? Database db))
 
 (defprotocol BitempDatabase
   (in-between [this t1 t2] "Retrieves a database with facts added or retrieved in between t1 and t2."))

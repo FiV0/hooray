@@ -6,7 +6,7 @@
             [hooray.fixtures :as fix :refer [*conn*]]
             [hooray.query :as q]))
 
-(t/use-fixtures :once fix/with-each-db-option*)
+(t/use-fixtures :each fix/with-each-db-option*)
 
 (t/deftest test-sanity-check
   (h/transact *conn* [{:name "Ivan"}])
@@ -115,71 +115,78 @@
 (t/deftest test-query-with-in-bindings
   (h/transact *conn* [{:db/id :ivan :name "Ivan" :last-name "Ivanov"}
                       {:db/id :petr :name "Petr" :last-name "Petrov"}])
+  (let [db (h/db *conn*)]
 
-  #_(t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
-                                      '{:find [e]
-                                        :in [$ name]
-                                        :where [[e :name name]]}
-                                      "Ivan")))
+    (t/is (= [[:ivan]]
+             (h/q '{:find [e]
+                    :in [$ name]
+                    :where [[e :name name]]}
+                  db
+                  "Ivan")))
 
-  (t/testing "the db var is optional (only option for now)"
+    (t/testing "the db var is optional (only option for now)"
+      (t/is (= [[:ivan]]
+               (h/q '{:find [e]
+                      :in [name]
+                      :where [[e :name name]]}
+                    db
+                    "Ivan"))))
+
+    (t/is (= [[:ivan]]
+             (h/q '{:find [e]
+                    :in [$ name last-name]
+                    :where [[e :name name]
+                            [e :last-name last-name]]}
+                  db
+                  "Ivan" "Ivanov")))
+
+
     (t/is (= [[:ivan]]
              (h/q
               '{:find [e]
-                :in [name]
+                :in [$ [name]]
                 :where [[e :name name]]}
-              "Ivan"))))
+              db
+              ["Ivan"])))
 
-  #_#_#_#_#_#_#_#_
-  (t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
-                                    '{:find [e]
-                                      :in [$ name last-name]
-                                      :where [[e :name name]
-                                              [e :last-name last-name]]}
-                                    "Ivan" "Ivanov")))
+    (t/is (= '([:ivan] [:petr])
+             (h/q
+              '{:find [e]
+                :in [$ [[name]]]
+                :where [[e :name name]]}
+              db
+              [["Ivan"] ["Petr"]])))
 
-  (t/is (= #{[(:xt/id ivan)]} (xt/q (xt/db *conn*)
-                                    '{:find [e]
-                                      :in [$ [name]]
-                                      :where [[e :name name]]}
-                                    ["Ivan"])))
-
-  (t/is (= #{[(:xt/id ivan)] [(:xt/id petr)]}
-           (xt/q (xt/db *conn*)
-                 '{:find [e]
-                   :in [$ [[name]]]
-                   :where [[e :name name]]}
-                 [["Ivan"] ["Petr"]])))
-
-  (t/is (= #{[(:xt/id ivan)] [(:xt/id petr)]}
-           (xt/q (xt/db *conn*)
-                 '{:find [e]
-                   :in [$ [name ...]]
-                   :where [[e :name name]]}
-                 ["Ivan" "Petr"])))
-
+    #_(t/is (= nil
+               (h/q
+                '{:find [e]
+                  :in [$ [name ...]]
+                  :where [[e :name name]]}
+                db
+                ["Ivan" "Petr"]))))
+  #_#_#_#_
   (t/testing "can access the db"
-    (t/is (= #{["class xtdb.query.QueryDatasource"]} (xt/q (xt/db *conn*) '{:find [ts]
-                                                                            :in [$]
-                                                                            :where [[(str t) ts]
-                                                                                    [(type $) t]]}))))
+    (t/is (= #{["class hdb.query.QueryDatasource"]} (h/q (h/db *conn*) '{:find [ts]
+                                                                         :in [$]
+                                                                         :where [[(str t) ts]
+                                                                                 [(type $) t]]}))))
   (t/testing "where clause is optional"
-    (t/is (= #{[1]} (xt/q (xt/db *conn*)
-                          '{:find [x]
-                            :in [$ x]}
-                          1))))
+    (t/is (= #{[1]} (h/q (h/db *conn*)
+                         '{:find [x]
+                           :in [$ x]}
+                         1))))
 
   (t/testing "can use both args and in"
-    (t/is (= #{[2]} (xt/q (xt/db *conn*)
-                          '{:find [x]
-                            :in [$ [x ...]]
-                            :args [{:x 1}
-                                   {:x 2}]}
-                          [2 3]))))
+    (t/is (= #{[2]} (h/q (h/db *conn*)
+                         '{:find [x]
+                           :in [$ [x ...]]
+                           :args [{:x 1}
+                                  {:x 2}]}
+                         [2 3]))))
 
   (t/testing "var bindings need to be distinct"
     (t/is (thrown-with-msg?
            IllegalArgumentException
            #"In binding variables not distinct"
-           (xt/q (xt/db *conn*) '{:find [x]
-                                  :in [$ [x x]]} [1 1])))))
+           (h/q (h/db *conn*) '{:find [x]
+                                :in [$ [x x]]} [1 1])))))

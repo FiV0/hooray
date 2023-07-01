@@ -4,6 +4,10 @@
             [hooray.constants :as constants])
   (:import (java.lang IllegalArgumentException UnsupportedOperationException)))
 
+(defn logic-var? [v]
+  (and (simple-symbol? v)
+       #_(comp #(str/starts-with? % "?") name)))
+
 (defn read-edn [f]
   (-> (slurp f)
       edn/read-string))

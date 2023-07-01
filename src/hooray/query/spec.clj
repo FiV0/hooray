@@ -7,9 +7,11 @@
             [hooray.util :as util])
   (:import (java.nio ByteBuffer)))
 
-(s/def ::logic-var
-  (s/and simple-symbol?
-         #_(comp #(str/starts-with? % "?") name)))
+(defn logic-var? [v]
+  (and (simple-symbol? v)
+       #_(comp #(str/starts-with? % "?") name)))
+
+(s/def ::logic-var logic-var?)
 
 (s/def ::aggregate
   (s/cat :aggregate simple-symbol?
@@ -128,13 +130,27 @@
 
 (s/def ::limit nat-int?)
 
+;; in
+
+(s/def ::args-list (s/coll-of logic-var? :kind vector? :min-count 1))
+
+(s/def ::binding
+  (s/or :scalar logic-var?
+        :collection (s/tuple logic-var? '#{...})
+        :tuple ::args-list
+        :relation (s/tuple ::args-list)))
+
+(s/def ::in
+  (s/and vector? (s/cat :source-var (s/? '#{$})
+                        :bindings (s/* ::binding))))
+
 (s/def ::query
   (s/keys :req-un [::find]
-          :opt-un [::where ::limit]))
+          :opt-un [::where ::limit ::in]))
 
 (s/def ::query-unique
   (s/keys :req-un [::find]
-          :opt-un [:unique/where ::limit]))
+          :opt-un [:unique/where ::limit ::in]))
 
 (defn validate-query [query]
   (if (s/invalid? query)

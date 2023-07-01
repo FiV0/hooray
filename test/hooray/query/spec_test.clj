@@ -35,6 +35,7 @@
 
 (->
  (qs/conform-query '{:find [a b c]
+                     :in [[[foo bar]]]
                      :where [[a :attr1 b]
                              [b :attr2 c]
                              [c :attr3 foo]
